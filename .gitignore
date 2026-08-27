@@ -1,0 +1,27 @@
+# saídas geradas
+relatorios/
+*.pdf
+*.png
+!docs/img/*.png
+
+# dados
+*.gdb/
+*.sde
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.zip
+
+# ambiente
+__pycache__/
+*.pyc
+.venv/
+*.log
+
+# ArcGIS
+*.aprx
+*.atbx
+*.tbx
+Index/

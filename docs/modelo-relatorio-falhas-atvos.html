@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modelo — Relatório de falhas de plantio | Atvos</title>
+<style>
+  :root{
+    --azul:#33657F;
+    --azul-esc:#22475A;
+    --azul-cl:#E7EEF2;
+    --papel:#FFFFFF;
+    --fundo:#EDF0F2;
+    --texto:#2F3336;
+    --texto-2:#6B7378;
+    --linha:#D8DEE2;
+    --ok:#2E7D5B;
+    --at:#D79A26;
+    --cr:#C0392B;
+    --h1:#EAF2ED; --h2:#F6E6C4; --h3:#EFC0B7; --h4:#C0392B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--fundo);font-family:Tahoma,Geneva,Verdana,sans-serif;color:var(--texto);font-size:11px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .aviso{max-width:297mm;margin:16px auto 8px;padding:10px 14px;background:#FFF8E1;border-left:4px solid var(--at);font-size:12px;color:#6B5518}
+  .page{width:297mm;height:210mm;background:var(--papel);margin:0 auto 16px;padding:0;position:relative;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.14)}
+  .cab{background:var(--azul);color:#fff;padding:11px 18px;display:flex;align-items:center;justify-content:space-between}
+  .cab .marca{font-size:9px;letter-spacing:2.4px;text-transform:uppercase;color:#B7CEDB;margin-bottom:2px}
+  .cab h1{font-size:17px;font-weight:bold;letter-spacing:.2px}
+  .cab .dir{text-align:right;font-size:10px;color:#CFE0E9;line-height:1.6}
+  .cab .dir b{color:#fff;font-size:12px}
+  .corpo{padding:14px 18px;height:calc(210mm - 44px - 20px)}
+  .rod{position:absolute;bottom:0;left:0;right:0;height:20px;border-top:1px solid var(--linha);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:9px;color:var(--texto-2)}
+
+  .eyebrow{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--azul);font-weight:bold;padding-bottom:4px;border-bottom:2px solid var(--azul-cl);margin-bottom:9px}
+  .grid{display:grid;gap:12px}
+  .g-2{grid-template-columns:1fr 1fr}
+  .g-cap{grid-template-columns:118mm 1fr}
+  .g-4{grid-template-columns:repeat(4,1fr)}
+  .g-diag{grid-template-columns:1fr 92mm}
+  .caixa{border:1px solid var(--linha);border-radius:3px;padding:10px 12px}
+  .caixa.tint{background:#F7F9FA}
+
+  .dados{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 14px}
+  .dado .rot{font-size:9px;color:var(--texto-2);text-transform:uppercase;letter-spacing:.4px}
+  .dado .val{font-size:12px;font-weight:bold;color:var(--texto)}
+
+  .kpi{border:1px solid var(--linha);border-radius:3px;padding:9px 11px;background:#F7F9FA}
+  .kpi .rot{font-size:9px;color:var(--texto-2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+  .kpi .num{font-size:26px;font-weight:bold;line-height:1}
+  .kpi .sub{font-size:9px;color:var(--texto-2);margin-top:3px}
+  .n-ok{color:var(--ok)} .n-at{color:var(--at)} .n-cr{color:var(--cr)}
+
+  .tag{display:inline-block;font-size:9px;font-weight:bold;padding:2px 8px;border-radius:9px;text-transform:uppercase;letter-spacing:.5px}
+  .t-ok{background:#E4F0EA;color:#1F5B41} .t-at{background:#FAEEDA;color:#7A5410} .t-cr{background:#F8E4E1;color:#8C2419}
+
+  table{width:100%;border-collapse:collapse;font-size:10.5px}
+  th{background:var(--azul-cl);color:var(--azul-esc);text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.6px;padding:5px 7px;border-bottom:1px solid var(--linha)}
+  td{padding:5px 7px;border-bottom:1px solid #EDF1F3}
+  td.num,th.num{text-align:right}
+  tr.destaque td{background:#FDF3F1}
+  tfoot td{font-weight:bold;background:#F7F9FA;border-top:1px solid var(--linha)}
+
+  .placeholder{border:1px dashed #B9C4CB;background:repeating-linear-gradient(45deg,#F4F7F8,#F4F7F8 9px,#EDF1F3 9px,#EDF1F3 18px);display:flex;align-items:center;justify-content:center;text-align:center;color:#7C8991;font-size:10px;border-radius:3px}
+
+  .escala{display:flex;align-items:center;gap:0;margin-top:7px}
+  .escala span{height:9px;flex:1}
+  .escala-rot{display:flex;justify-content:space-between;font-size:9px;color:var(--texto-2);margin-top:3px}
+
+  .comp{margin-bottom:9px}
+  .comp .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+  .comp .nome{font-size:10.5px}
+  .comp .v{font-size:12px;font-weight:bold}
+  .comp .barra{position:relative;height:7px;background:#EDF1F3;border-radius:2px}
+  .comp .preenche{position:absolute;top:0;left:0;height:7px;border-radius:2px}
+  .comp .marca-med{position:absolute;top:-2px;width:2px;height:11px;background:var(--azul-esc)}
+  .comp .leg{font-size:9px;color:var(--texto-2);margin-top:2px}
+
+  .linha-tempo{display:flex;align-items:flex-start;gap:0;margin-top:4px}
+  .etapa{flex:1;position:relative;padding-top:16px;text-align:center}
+  .etapa:before{content:"";position:absolute;top:5px;left:0;right:0;height:2px;background:var(--azul-cl)}
+  .etapa:after{content:"";position:absolute;top:1px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--azul)}
+  .etapa.alerta:after{border-color:var(--cr);background:var(--cr)}
+  .etapa .qdo{font-size:9px;color:var(--texto-2)}
+  .etapa .oq{font-size:10px;font-weight:bold}
+  .etapa.alerta .oq{color:var(--cr)}
+
+  .leitura{background:var(--azul-cl);border-left:4px solid var(--azul);padding:9px 12px;font-size:11px;line-height:1.6}
+  .leitura b{color:var(--azul-esc)}
+
+  .fator{display:flex;justify-content:space-between;align-items:center;padding:5.5px 0;border-bottom:1px solid #EDF1F3;font-size:10.5px}
+  .fator:last-child{border-bottom:none}
+  .fator .v{font-weight:bold;text-align:right}
+
+  .encam{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}
+  .assin{border-top:1px solid var(--linha);margin-top:26px;padding-top:5px;font-size:9px;color:var(--texto-2);text-align:center}
+
+  @media print{
+    body{background:#fff}
+    .aviso{display:none}
+    .page{margin:0;box-shadow:none;page-break-after:always}
+    @page{size:A4 landscape;margin:0}
+  }
+  @media (max-width:1140px){
+    .page{width:100%;height:auto;min-height:auto}
+    .corpo{height:auto}
+    .rod{position:static;height:auto;padding:6px 18px}
+  }
+</style>
+</head>
+<body>
+
+<div class="aviso"><b>Modelo de layout</b> — os números e nomes são ilustrativos, montados sobre a estrutura de dados discutida (BigQuery/Bem Agro, base V36, estações Atvos e Survey123 de porte). Use Ctrl+P para ver a paginação em A4 paisagem.</div>
+
+<!-- ===================== PÁGINA 1 ===================== -->
+<section class="page">
+  <div class="cab">
+    <div>
+      <div class="marca">Atvos · Geotecnologia</div>
+      <h1>Relatório de falhas de plantio</h1>
+    </div>
+    <div class="dir">
+      <b>Fazenda São João · Talhões 13, 14, 16</b><br>
+      Unidade UCP · Safra 26/27 · Chavesig 90591083
+    </div>
+  </div>
+
+  <div class="corpo">
+    <div class="grid g-cap" style="margin-bottom:12px">
+      <div>
+        <div class="eyebrow">Identificação da área</div>
+        <div class="dados">
+          <div class="dado"><div class="rot">Unidade</div><div class="val">UCP</div></div>
+          <div class="dado"><div class="rot">Fazenda</div><div class="val">São João</div></div>
+          <div class="dado"><div class="rot">Setor</div><div class="val">314</div></div>
+          <div class="dado"><div class="rot">Frente responsável</div><div class="val">181 · Santa Cândida</div></div>
+          <div class="dado"><div class="rot">Ciclo</div><div class="val">18M · cana planta</div></div>
+          <div class="dado"><div class="rot">Área PIMS</div><div class="val">99,3 ha</div></div>
+          <div class="dado"><div class="rot">Variedade</div><div class="val">SP83-2847</div></div>
+          <div class="dado"><div class="rot">Solo predominante</div><div class="val">Latossolo médio arenoso</div></div>
+          <div class="dado"><div class="rot">Ambiente</div><div class="val">E (66%) · D (32%)</div></div>
+          <div class="dado"><div class="rot">Intervalo de plantio</div><div class="val">18-03 a 31-03-2026</div></div>
+          <div class="dado"><div class="rot">Data média de plantio</div><div class="val">31-03-2026</div></div>
+          <div class="dado"><div class="rot">Muda · matriz</div><div class="val">A · 98% período ideal</div></div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:13px">Levantamento aéreo</div>
+        <div class="dados">
+          <div class="dado"><div class="rot">Data do voo</div><div class="val">09-09-2026</div></div>
+          <div class="dado"><div class="rot">Dias após o plantio</div><div class="val">162 DAP</div></div>
+          <div class="dado"><div class="rot">Aeronave</div><div class="val">eBee X</div></div>
+          <div class="dado"><div class="rot">Área analisada</div><div class="val">113,5 ha</div></div>
+          <div class="dado"><div class="rot">Processamento</div><div class="val">Bem Agro</div></div>
+          <div class="dado"><div class="rot">Publicado no PIMS</div><div class="val">18-09-2026</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow">Ortomosaico</div>
+        <div class="placeholder" style="height:64mm">Ortomosaico do voo com o limite dos talhões<br><span style="font-size:9px">imagem do serviço publicado no ArcGIS Enterprise</span></div>
+      </div>
+    </div>
+
+    <div class="eyebrow">Resultado</div>
+    <div class="grid g-4" style="margin-bottom:12px">
+      <div class="kpi"><div class="rot">Falhas na área</div><div class="num n-cr">6,8%</div><div class="sub">Fonte PIMS · meta 5,0%</div></div>
+      <div class="kpi"><div class="rot">Tamanho médio da falha</div><div class="num">1,4 m</div><div class="sub">Média da unidade 1,1 m</div></div>
+      <div class="kpi"><div class="rot">Metros de falha por hectare</div><div class="num">452</div><div class="sub">Média da unidade 310</div></div>
+      <div class="kpi"><div class="rot">Área acima da meta</div><div class="num n-at">61%</div><div class="sub">69,2 ha de 113,5 ha</div></div>
+    </div>
+
+    <div class="eyebrow">Linha do tempo da área</div>
+    <div class="linha-tempo">
+      <div class="etapa"><div class="qdo">18-03 a 31-03</div><div class="oq">Plantio</div></div>
+      <div class="etapa alerta"><div class="qdo">02-04 a 24-04</div><div class="oq">Veranico de 22 dias</div></div>
+      <div class="etapa"><div class="qdo">02-09</div><div class="oq">Porte aprovado</div></div>
+      <div class="etapa"><div class="qdo">09-09</div><div class="oq">Voo de falhas</div></div>
+      <div class="etapa"><div class="qdo">18-09</div><div class="oq">Resultado no PIMS</div></div>
+    </div>
+  </div>
+
+  <div class="rod"><span>Geotecnologia · Cartografia e Operação VANT</span><span>Página 1 de 4</span></div>
+</section>
+
+<!-- ===================== PÁGINA 2 ===================== -->
+<section class="page">
+  <div class="cab">
+    <div><div class="marca">Atvos · Geotecnologia</div><h1>Distribuição das falhas</h1></div>
+    <div class="dir"><b>Fazenda São João</b><br>Chavesig 90591083 · voo 09-09-2026</div>
+  </div>
+
+  <div class="corpo">
+    <div class="grid g-2" style="height:100%">
+      <div>
+        <div class="eyebrow">Mapa de calor da densidade de falhas</div>
+        <svg viewBox="0 0 320 250" style="width:100%;height:auto;max-height:118mm">
+          <path d="M40,20 L250,14 L285,105 L235,235 L80,228 L25,120 Z" fill="var(--h1)"/>
+          <path d="M72,42 L210,34 L246,110 L206,196 L108,192 L62,112 Z" fill="var(--h2)"/>
+          <path d="M96,66 L172,52 L206,112 L170,168 L124,160 L88,106 Z" fill="var(--h3)"/>
+          <path d="M120,86 L156,78 L176,116 L150,146 L122,132 Z" fill="var(--h4)"/>
+          <path d="M40,20 L250,14 L285,105 L235,235 L80,228 L25,120 Z" fill="none" stroke="#5A6B75" stroke-width="1.6"/>
+          <path d="M25,120 L285,105" stroke="#fff" stroke-width="2.4" fill="none"/>
+          <path d="M150,17 L170,232" stroke="#fff" stroke-width="2.4" fill="none"/>
+          <text x="70" y="62" font-family="Tahoma" font-size="11" fill="#2F3336">T-14</text>
+          <text x="215" y="70" font-family="Tahoma" font-size="11" fill="#2F3336">T-13</text>
+          <text x="105" y="200" font-family="Tahoma" font-size="11" fill="#2F3336">T-16</text>
+        </svg>
+        <div class="escala">
+          <span style="background:var(--h1)"></span><span style="background:var(--h2)"></span><span style="background:var(--h3)"></span><span style="background:var(--h4)"></span>
+        </div>
+        <div class="escala-rot"><span>0</span><span>300</span><span>600</span><span>900</span><span>1200 m/ha</span></div>
+        <div style="font-size:9px;color:var(--texto-2);margin-top:5px">Densidade calculada sobre as linhas de falha entregues pela Bem Agro, ponderada pelo comprimento. Escala fixa, comparável entre áreas e safras.</div>
+      </div>
+
+      <div>
+        <div class="eyebrow">Resultado por talhão</div>
+        <table>
+          <thead>
+            <tr><th>Talhão</th><th class="num">Área</th><th class="num">Falhas</th><th class="num">Tam. médio</th><th class="num">m/ha</th><th>Situação</th></tr>
+          </thead>
+          <tbody>
+            <tr class="destaque"><td>16</td><td class="num">12,4 ha</td><td class="num">11,6%</td><td class="num">1,7 m</td><td class="num">780</td><td><span class="tag t-cr">Crítico</span></td></tr>
+            <tr><td>13</td><td class="num">9,8 ha</td><td class="num">7,6%</td><td class="num">1,5 m</td><td class="num">510</td><td><span class="tag t-at">Atenção</span></td></tr>
+            <tr><td>17</td><td class="num">18,2 ha</td><td class="num">7,1%</td><td class="num">1,3 m</td><td class="num">470</td><td><span class="tag t-at">Atenção</span></td></tr>
+            <tr><td>14</td><td class="num">15,1 ha</td><td class="num">5,9%</td><td class="num">1,2 m</td><td class="num">390</td><td><span class="tag t-at">Atenção</span></td></tr>
+            <tr><td>11</td><td class="num">14,6 ha</td><td class="num">4,5%</td><td class="num">1,2 m</td><td class="num">300</td><td><span class="tag t-ok">Dentro da meta</span></td></tr>
+            <tr><td>9</td><td class="num">7,3 ha</td><td class="num">3,1%</td><td class="num">0,9 m</td><td class="num">210</td><td><span class="tag t-ok">Dentro da meta</span></td></tr>
+          </tbody>
+          <tfoot>
+            <tr><td>Área</td><td class="num">113,5 ha</td><td class="num">6,8%</td><td class="num">1,4 m</td><td class="num">452</td><td>—</td></tr>
+          </tfoot>
+        </table>
+
+        <div class="eyebrow" style="margin-top:14px">Onde está a falha</div>
+        <div class="caixa tint">
+          <div class="comp">
+            <div class="top"><span class="nome">Concentração no terço sul do talhão 16</span><span class="v n-cr">780 m/ha</span></div>
+            <div class="barra"><div class="preenche" style="width:65%;background:var(--cr)"></div><div class="marca-med" style="left:26%"></div></div>
+            <div class="leg">Traço = média da unidade (310 m/ha)</div>
+          </div>
+          <div class="comp">
+            <div class="top"><span class="nome">Bordadura e cabeceiras</span><span class="v n-at">540 m/ha</span></div>
+            <div class="barra"><div class="preenche" style="width:45%;background:var(--at)"></div><div class="marca-med" style="left:26%"></div></div>
+            <div class="leg">Faixa de 30 m a partir do carreador</div>
+          </div>
+          <div class="comp" style="margin-bottom:0">
+            <div class="top"><span class="nome">Restante da área</span><span class="v n-ok">280 m/ha</span></div>
+            <div class="barra"><div class="preenche" style="width:23%;background:var(--ok)"></div><div class="marca-med" style="left:26%"></div></div>
+            <div class="leg">Abaixo da média da unidade</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rod"><span>Percentual oficial conforme PIMS · detalhamento espacial pelas linhas de falha</span><span>Página 2 de 4</span></div>
+</section>
+
+<!-- ===================== PÁGINA 3 ===================== -->
+<section class="page">
+  <div class="cab">
+    <div><div class="marca">Atvos · Geotecnologia</div><h1>Diagnóstico climático</h1></div>
+    <div class="dir"><b>Estação Barra Bonita A-70</b><br>Janela 0–30 DAP · CAD 31,3 mm</div>
+  </div>
+
+  <div class="corpo">
+    <div class="grid g-diag" style="margin-bottom:12px">
+      <div>
+        <div class="eyebrow">Chuva diária após o plantio</div>
+        <svg viewBox="0 0 560 190" style="width:100%;height:auto;max-height:82mm">
+          <line x1="30" y1="150" x2="550" y2="150" stroke="#D8DEE2" stroke-width="1"/>
+          <line x1="30" y1="100" x2="550" y2="100" stroke="#EDF1F3" stroke-width="1"/>
+          <line x1="30" y1="50" x2="550" y2="50" stroke="#EDF1F3" stroke-width="1"/>
+          <text x="24" y="153" text-anchor="end" font-family="Tahoma" font-size="9" fill="#6B7378">0</text>
+          <text x="24" y="103" text-anchor="end" font-family="Tahoma" font-size="9" fill="#6B7378">20</text>
+          <text x="24" y="53" text-anchor="end" font-family="Tahoma" font-size="9" fill="#6B7378">40 mm</text>
+          <rect x="120" y="20" width="176" height="130" fill="#F8E4E1"/>
+          <text x="208" y="33" text-anchor="middle" font-family="Tahoma" font-size="10" fill="#8C2419">Veranico de 22 dias</text>
+          <line x1="112" y1="18" x2="112" y2="150" stroke="#33657F" stroke-width="1.5" stroke-dasharray="3,3"/>
+          <text x="108" y="16" text-anchor="end" font-family="Tahoma" font-size="10" fill="#22475A">Plantio</text>
+          <g fill="#33657F">
+            <rect x="36" y="120" width="9" height="30"/><rect x="50" y="98" width="9" height="52"/>
+            <rect x="64" y="132" width="9" height="18"/><rect x="78" y="112" width="9" height="38"/>
+            <rect x="92" y="140" width="9" height="10"/><rect x="106" y="136" width="9" height="14"/>
+            <rect x="302" y="128" width="9" height="22"/><rect x="316" y="142" width="9" height="8"/>
+            <rect x="330" y="116" width="9" height="34"/><rect x="344" y="138" width="9" height="12"/>
+            <rect x="358" y="146" width="9" height="4"/><rect x="372" y="126" width="9" height="24"/>
+            <rect x="400" y="134" width="9" height="16"/><rect x="414" y="144" width="9" height="6"/>
+            <rect x="442" y="122" width="9" height="28"/><rect x="470" y="140" width="9" height="10"/>
+            <rect x="498" y="146" width="9" height="4"/><rect x="526" y="138" width="9" height="12"/>
+          </g>
+          <text x="36" y="168" font-family="Tahoma" font-size="9" fill="#6B7378">mar</text>
+          <text x="150" y="168" font-family="Tahoma" font-size="9" fill="#6B7378">abr</text>
+          <text x="300" y="168" font-family="Tahoma" font-size="9" fill="#6B7378">mai</text>
+          <text x="420" y="168" font-family="Tahoma" font-size="9" fill="#6B7378">jun</text>
+          <text x="520" y="168" font-family="Tahoma" font-size="9" fill="#6B7378">jul</text>
+        </svg>
+      </div>
+
+      <div>
+        <div class="eyebrow">Área × média da unidade</div>
+        <div class="comp">
+          <div class="top"><span class="nome">Chuva 0–15 DAP</span><span class="v n-cr">6 mm</span></div>
+          <div class="barra"><div class="preenche" style="width:14%;background:var(--cr)"></div><div class="marca-med" style="left:52%"></div></div>
+          <div class="leg">Média da unidade 42 mm</div>
+        </div>
+        <div class="comp">
+          <div class="top"><span class="nome">Chuva 0–30 DAP</span><span class="v n-cr">18 mm</span></div>
+          <div class="barra"><div class="preenche" style="width:22%;background:var(--cr)"></div><div class="marca-med" style="left:62%"></div></div>
+          <div class="leg">Média da unidade 76 mm</div>
+        </div>
+        <div class="comp">
+          <div class="top"><span class="nome">Maior veranico</span><span class="v n-cr">22 dias</span></div>
+          <div class="barra"><div class="preenche" style="width:73%;background:var(--cr)"></div><div class="marca-med" style="left:30%"></div></div>
+          <div class="leg">Média da unidade 9 dias</div>
+        </div>
+        <div class="comp">
+          <div class="top"><span class="nome">Dias com chuva</span><span class="v n-at">4 dias</span></div>
+          <div class="barra"><div class="preenche" style="width:33%;background:var(--at)"></div><div class="marca-med" style="left:66%"></div></div>
+          <div class="leg">Média da unidade 8 dias</div>
+        </div>
+        <div class="comp">
+          <div class="top"><span class="nome">Déficit hídrico acumulado</span><span class="v n-cr">61 mm</span></div>
+          <div class="barra"><div class="preenche" style="width:68%;background:var(--cr)"></div><div class="marca-med" style="left:27%"></div></div>
+          <div class="leg">Média da unidade 24 mm</div>
+        </div>
+        <div class="comp" style="margin-bottom:0">
+          <div class="top"><span class="nome">ARM/CAD médio 0–30 DAP</span><span class="v n-at">31%</span></div>
+          <div class="barra"><div class="preenche" style="width:31%;background:var(--at)"></div><div class="marca-med" style="left:64%"></div></div>
+          <div class="leg">Média da unidade 64% · faixa crítica abaixo de 30%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="leitura">
+      <b>Leitura:</b> a área recebeu 18 mm nos primeiros 30 dias contra 76 mm da média da unidade, com veranico de 22 dias iniciado dois dias após o término do plantio — exatamente a janela de brotação. O solo é latossolo arenoso, de baixa capacidade de retenção (CAD 31,3 mm), o que amplifica o efeito do déficit. A concentração de falhas no terço sul e nas cabeceiras é compatível com estresse hídrico, e não com falha operacional distribuída.
+    </div>
+  </div>
+
+  <div class="rod"><span>Estações meteorológicas Atvos · vínculo talhão–estação pela estação mais próxima</span><span>Página 3 de 4</span></div>
+</section>
+
+<!-- ===================== PÁGINA 4 ===================== -->
+<section class="page">
+  <div class="cab">
+    <div><div class="marca">Atvos · Geotecnologia</div><h1>Fatores agronômicos, porte e encaminhamento</h1></div>
+    <div class="dir"><b>Fazenda São João</b><br>Safra 26/27 · comitê de 25-09-2026</div>
+  </div>
+
+  <div class="corpo">
+    <div class="grid g-2" style="margin-bottom:12px">
+      <div>
+        <div class="eyebrow">Fatores agronômicos</div>
+        <div class="caixa">
+          <div class="fator"><span>Variedade</span><span class="v">SP83-2847 · 100% aderente</span></div>
+          <div class="fator"><span>Ambiente de produção</span><span class="v">E (66%) · D (32%)</span></div>
+          <div class="fator"><span>Solo</span><span class="v">Latossolo médio arenoso</span></div>
+          <div class="fator"><span>Muda · certificação</span><span class="v">A · 100%</span></div>
+          <div class="fator"><span>Aderência à matriz de plantio</span><span class="v">98,2% período ideal</span></div>
+          <div class="fator"><span>Protocolo calcário</span><span class="v" style="color:var(--cr)">Não aderente</span></div>
+          <div class="fator"><span>Protocolo sphenophorus</span><span class="v" style="color:var(--at)">34% não recomendado</span></div>
+          <div class="fator"><span>Matologia (Bem Agro)</span><span class="v">0,6% · infestação baixa</span></div>
+          <div class="fator"><span>TCH potencial 1º corte</span><span class="v">110 ton/ha</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow">Avaliação de porte · Survey123</div>
+        <div class="caixa tint" style="margin-bottom:10px">
+          <div class="dados" style="grid-template-columns:repeat(2,1fr)">
+            <div class="dado"><div class="rot">Data da avaliação</div><div class="val">02-09-2026</div></div>
+            <div class="dado"><div class="rot">Piloto</div><div class="val">Operação VANT</div></div>
+            <div class="dado"><div class="rot">Situação</div><div class="val" style="color:var(--ok)">Apta para voo</div></div>
+            <div class="dado"><div class="rot">Defasagem até o voo</div><div class="val">7 dias</div></div>
+            <div class="dado"><div class="rot">Talhões abrangidos</div><div class="val">13, 14, 16, 17</div></div>
+            <div class="dado"><div class="rot">Porte observado</div><div class="val">Baixo · linhas visíveis</div></div>
+          </div>
+          <div style="font-size:10px;color:var(--texto-2);margin-top:8px;border-top:1px solid var(--linha);padding-top:6px">
+            <b style="color:var(--texto)">Observação do piloto:</b> canavial desuniforme, com reboleiras de baixo estande já visíveis na avaliação de campo.
+          </div>
+        </div>
+        <div class="placeholder" style="height:38mm">Fotos anexadas na avaliação de porte<br><span style="font-size:9px">carregadas do serviço do Survey123</span></div>
+      </div>
+    </div>
+
+    <div class="eyebrow">Encaminhamento</div>
+    <div class="encam">
+      <div class="caixa">
+        <div class="rot" style="font-size:9px;color:var(--texto-2);text-transform:uppercase">Decisão</div>
+        <div style="font-size:13px;font-weight:bold;color:var(--cr);margin-top:3px">Replantio no talhão 16</div>
+        <div style="font-size:10px;color:var(--texto-2);margin-top:3px">12,4 ha · demais talhões em monitoramento</div>
+      </div>
+      <div class="caixa">
+        <div class="rot" style="font-size:9px;color:var(--texto-2);text-transform:uppercase">Causa predominante</div>
+        <div style="font-size:13px;font-weight:bold;margin-top:3px">Déficit hídrico</div>
+        <div style="font-size:10px;color:var(--texto-2);margin-top:3px">Veranico de 22 dias na brotação</div>
+      </div>
+      <div class="caixa">
+        <div class="rot" style="font-size:9px;color:var(--texto-2);text-transform:uppercase">Discutido em comitê</div>
+        <div style="font-size:13px;font-weight:bold;margin-top:3px">Sim · 25-09-2026</div>
+        <div style="font-size:10px;color:var(--texto-2);margin-top:3px">Agrícola, planejamento e geotecnologia</div>
+      </div>
+      <div class="caixa">
+        <div class="rot" style="font-size:9px;color:var(--texto-2);text-transform:uppercase">Responsável e prazo</div>
+        <div style="font-size:13px;font-weight:bold;margin-top:3px">Frente 181</div>
+        <div style="font-size:10px;color:var(--texto-2);margin-top:3px">Execução até 20-10-2026</div>
+      </div>
+    </div>
+
+    <div class="grid g-4" style="margin-top:6px">
+      <div class="assin">Coordenação de Geotecnologia</div>
+      <div class="assin">Gerência Agrícola</div>
+      <div class="assin">Planejamento</div>
+      <div class="assin">Frente responsável</div>
+    </div>
+  </div>
+
+  <div class="rod"><span>Relatório gerado a partir do ArcGIS Enterprise · dados PIMS, BigQuery e Survey123</span><span>Página 4 de 4</span></div>
+</section>
+
+</body>
+</html>
