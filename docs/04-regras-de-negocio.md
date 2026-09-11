@@ -85,9 +85,11 @@ arcpy.analysis.SpatialJoin(..., match_option="HAVE_THEIR_CENTER_IN")
 dois talhões seria contada duas vezes com interseção; pelo centro pertence a um
 só, e a soma dos talhões continua igual ao total da área.
 
-O join valida a si mesmo: linhas que não caem em nenhum talhão ficam com
-`CHAVESIG` nulo e são reportadas. Na área piloto foram 319 de 58.765 (0,5%,
-384 m de 59 mil) — borda de polígono, dentro do esperado.
+O join valida a si mesmo: linhas que não caem em nenhum talhão são contadas na
+tela e **não são gravadas**. Na área piloto foram 319 de 58.765 (0,5%, 384 m
+de 59 mil) — borda de polígono, dentro do esperado. Se mais da metade da
+entrega ficar sem talhão, nada é gravado: a área provavelmente não está no
+inventário vigente.
 
 ### 2.2 Contra o inventário, não a base atual
 
@@ -99,6 +101,23 @@ Atvos, não escolha técnica, e tem duas consequências:
 - Talhões plantados em faixas existem separados no inventário (talhão 1 e
   talhão 6001) e unificados no pós-plantio. O PIMS divulga **separado**, então
   o relatório também.
+
+### 2.3 A entrega salva na pasta
+
+Quem pede o relatório baixa as linhas da fazenda na Bem Agro e salva em
+`ENTRADAS\LINHAS` — o `.zip`, a pasta descompactada ou os arquivos soltos. A
+carga procura o shapefile de linhas com `Length` e `LengthComp` e descobre a
+fazenda pelo join.
+
+- **Fazenda de borda.** A que tiver menos de 1% das linhas da entrega entrou
+  pela borda e fica de fora.
+- **Troca por talhão.** As linhas novas substituem as dos talhões que a
+  entrega traz; os outros talhões da fazenda ficam. Grava primeiro, apaga
+  depois. Ver [ADR 0012](adr/0012-linhas-trocadas-por-talhao.md).
+- **Voo.** `DATA_VOO` sai do Registro de Missão pela regra 4.1. O `LOTE` é a
+  fazenda com mais linhas e o momento da carga.
+- **Depois.** O mapa de calor da fazenda é refeito e a entrega vai para
+  `ENTRADAS\LINHAS\CARREGADAS\<lote>_<conta>`.
 
 ---
 
@@ -115,6 +134,9 @@ geométrica é irrelevante e o resultado é exatamente **metros de falha
 compensada por hectare** — a mesma métrica da tabela.
 
 Parâmetros: célula de 2 m, raio de 40 m, unidade de área em hectares.
+
+O mapa é o da **fazenda inteira**, com todas as linhas dela que estão no banco,
+e é refeito a cada entrega carregada.
 
 ### 3.2 Escala fixa, ancorada no semáforo
 
@@ -326,9 +348,11 @@ metade existente. Ver [pendências](07-pendencias.md).
 **Ler antes de apagar.** Toda carga por substituição total lê a origem inteira
 e aborta se vier vazia. Sem isso, uma falha de conexão zeraria produção.
 
-**Idempotência por lote.** A `LINHAS_FALHA` acumula entregas; rodar de novo a
-mesma entrega substitui em vez de duplicar. Sem o `LOTE`, uma execução repetida
-dobraria o número de falhas sem ninguém perceber.
+**Troca por talhão.** A `LINHAS_FALHA` acumula entregas de áreas diferentes;
+carregar de novo um talhão substitui as linhas dele em vez de duplicar. A view
+soma todas as linhas do talhão, sem olhar o lote — sem a troca, uma entrega
+repetida dobraria o número de falhas sem ninguém perceber. Ver
+[ADR 0012](adr/0012-linhas-trocadas-por-talhao.md).
 
 **Archiving.** Nenhuma tabela reescrita diariamente deve ter archiving ligado.
 A `BASE_SAFRA` tem, e acumulou 3,4 milhões de linhas para 25.710 feições.
@@ -406,25 +430,26 @@ na tabela e no relatório.
 ### 9.5 Classificação do talhão
 
 ```
-período = período da matriz que contém a DATA_PLANTIO da BASE_SAFRA
+período = período da matriz que contém a data de plantio (PIMS; inventário se o PIMS não tiver)
 classe  = MATRIZ_PLANTIO[unidade de manejo, faixa de declividade, período]
 ```
 
-A data de plantio vem do **inventário vigente**, não do PIMS. Talhão sem data de
-plantio no inventário, sem faixa de declividade ou sem regra na matriz não é
-classificado.
+A data de plantio é a do **PIMS** — a mesma do clima e do DAP. A do inventário
+vigente só entra quando o PIMS não tem o talhão. Ver
+[ADR 0011](adr/0011-data-de-plantio-do-pims.md). Talhão sem data nas duas
+fontes, sem faixa de declividade ou sem regra na matriz não é classificado.
 
-Distribuição dos 5.520 talhões classificados:
+Distribuição dos 5.720 talhões classificados em 11/09/2026:
 
 | Classe | Talhões | % |
 |---|---|---|
-| `Restritivo` | 1.881 | 34,1% |
-| `Favoravel` | 1.457 | 26,4% |
-| `Favoravel com irrigacao` | 1.185 | 21,5% |
-| `Aceitavel` | 997 | 18,1% |
+| `Restritivo` | 1.933 | 33,8% |
+| `Favoravel` | 1.471 | 25,7% |
+| `Favoravel com irrigacao` | 1.282 | 22,4% |
+| `Aceitavel` | 1.034 | 18,1% |
 
-1.189 deles carregam condição: 513 exigem cobertura bem formada e dessecada, 505
-cobertura bem formada, e 171 trazem o alerta de solo argiloso no frio.
+1.210 deles carregam condição: 522 exigem cobertura bem formada e dessecada, 508
+cobertura bem formada, e 180 trazem o alerta de solo argiloso no frio.
 
 ### 9.6 Ressalva só quando a classe poderia ser outra
 
@@ -436,8 +461,8 @@ cobre menos de 60% do talhão.
 Herdar a ressalva da declividade marcaria um terço dos talhões, e ninguém lê um
 alerta tão frequente. Ver [ADR 0009](adr/0009-ressalva-so-quando-muda-a-classe.md).
 
-Hoje são 4.062 classificações `Boa` e 1.458 `Ressalva` — 984 por declividade e
-474 por talhão dividido.
+Em 11/09/2026 eram 4.226 classificações `Boa` e 1.494 `Ressalva` — 998 por
+declividade e 496 por talhão dividido.
 
 **Limitação conhecida:** a versão atual testa a faixa vizinha em todo talhão,
 sem olhar se a mediana está perto da fronteira. Ver [pendências](07-pendencias.md).

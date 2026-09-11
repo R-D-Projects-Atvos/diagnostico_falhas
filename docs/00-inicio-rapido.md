@@ -37,7 +37,7 @@ polígono no KML. O talhão vem por spatial join.
 ## Área de referência
 
 Fazenda **320127**, unidade USL, talhões 4 a 7, plantio em 03/03/2026, voo em
-08/07/2026. É a única área com linhas de falha carregadas e serve para validar
+08/07/2026. Foi a primeira área com linhas de falha carregadas e serve para validar
 qualquer alteração. Valores esperados em [06 — Operação](06-operacao.md).
 
 ## Glossário

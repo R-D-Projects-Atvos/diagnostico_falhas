@@ -77,18 +77,6 @@ são de talhões cuja mediana está longe dela**. Na área piloto, o talhão 9, 
 Proposta: só testar a faixa vizinha quando `DECLIV_CONFIANCA = 'Ressalva'`. As
 ressalvas de fronteira cairiam de 984 para 361.
 
-### Data de plantio da classificação só do inventário
-
-A classificação lê a `DATA_PLANTIO` da `BASE_SAFRA` vigente. Na view, 199
-talhões têm unidade de manejo, faixa de declividade e data de plantio e mesmo
-assim estão sem classe. A fazenda 310438, que não está no inventário vigente, é
-um desses casos: 19 talhões com unidade de manejo, nenhum classificado.
-
-Decisão pendente: usar a data do PIMS quando o inventário não tiver, ou manter o
-inventário como única fonte — coerente com o
-[ADR 0006](adr/0006-inventario-como-alvo-do-join.md) — e dizer no relatório por
-que a época não aparece.
-
 ### Mancha de solos incompleta em USL-UEL
 
 A `SOLOS_ATVOS` cobre 3.109 dos 3.400 talhões vigentes da UEL (91%) e 3.510 dos
@@ -152,17 +140,17 @@ A `CLIMA_CONFIABILIDADE` hoje considera só a distância da estação. Uma janel
 com 23 de 31 dias sem registro produz acumulados que não são comparáveis, mas
 aparece como "Boa" se a estação estiver perto.
 
-### Automação de `LOTE` e `DATA_VOO`
-
-Hoje são preenchidos à mão no `carga_linhas_falha`. O `LOTE` pode sair do nome
-da pasta ou do arquivo da entrega. A `DATA_VOO` pode ser resolvida pela regra
-do voo (seção 4.1 das regras de negócio), com relatório de pendências quando a
-missão não for encontrada.
-
 ### Quebras do mapa de calor desatualizadas
 
 O `mapa_calor_falhas.py` ainda usa 300/600/900. O gerador já aplica
 280/500/1000 no desenho. Alinhar os dois.
+
+### Pasta das linhas depende do OneDrive do João
+
+A `ENTRADAS\LINHAS` só existe no servidor pela sincronização do OneDrive do
+João, e as outras contas leem por permissão dada nessa pasta. Se a
+sincronização parar, ou a pasta mudar de lugar na biblioteca, a carga pelo
+relatório para de achar as entregas. O mesmo vale para a planilha do clima.
 
 ### Monitoramento Zeus ainda depende do Excel
 

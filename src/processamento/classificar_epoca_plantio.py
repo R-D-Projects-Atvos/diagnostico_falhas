@@ -4,7 +4,8 @@ Classifica a epoca de plantio de cada talhao segundo a Matriz de Plantio.
 
 Junta tres coisas que ja estao no banco:
   unidade de manejo + faixa de declividade  ->  TALHAO_MANEJO
-  data de plantio                           ->  BASE_SAFRA
+  data de plantio                           ->  PIMS, ou BASE_SAFRA se o
+                                                PIMS nao tiver (data_plantio.py)
   recomendacao por periodo                  ->  MATRIZ_PLANTIO
 
 e responde: aquela area foi plantada em epoca favoravel, aceitavel ou
@@ -32,7 +33,12 @@ Geotecnologia / Cartografia - Atvos
 import datetime
 import functools
 import os
+import sys
+
 import arcpy
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import data_plantio  # noqa: E402
 
 print = functools.partial(print, flush=True)
 arcpy.env.overwriteOutput = True
@@ -56,6 +62,7 @@ CAMPOS = [
     ("CHAVESIG", "TEXT", 20),
     ("SAFRA", "TEXT", 10),
     ("DT_PLANTIO", "DATE", None),
+    ("DT_PLANTIO_FONTE", "TEXT", 12),
     ("PERIODO_PLANTIO", "TEXT", 12),
     ("NUM_MANEJO", "SHORT", None),
     ("FAIXA_DECLIV", "TEXT", 12),
@@ -117,14 +124,13 @@ def ler_manejo():
 
 
 def ler_plantio():
-    """{chavesig: (safra, data de plantio)} - so o inventario vigente."""
-    dados = {}
-    campos = ["Chavesig", "Safra", "DATA_PLANTIO"]
-    with arcpy.da.SearchCursor(FC_INVENTARIO, campos) as cur:
-        for chave, safra, plantio in cur:
-            if not chave or plantio is None:
-                continue
-            dados[chave.strip()] = ((safra or "").strip(), plantio)
+    """{chavesig: (safra, data de plantio, fonte da data)}.
+
+    A data e a do PIMS; a do inventario so quando o PIMS nao tem o talhao
+    (data_plantio.py)."""
+    dados = {chave: (safra or "", plantio, fonte)
+             for chave, (plantio, fonte, _, safra)
+             in data_plantio.ler(SDE, FC_INVENTARIO).items()}
     print("talhoes com data de plantio: %d" % len(dados))
     return dados
 
@@ -137,8 +143,22 @@ def vizinhas(faixa):
             if 0 <= j < len(FAIXAS_ORDEM)]
 
 
+def garantir_campos():
+    """Acrescenta campos novos numa tabela que ja existe, sem recriar."""
+    existentes = {f.name.upper() for f in arcpy.ListFields(TB_SAIDA)}
+    for nome, tipo, tam in CAMPOS:
+        if nome.upper() in existentes:
+            continue
+        print("  acrescentando campo %s" % nome)
+        if tam:
+            arcpy.management.AddField(TB_SAIDA, nome, tipo, field_length=tam)
+        else:
+            arcpy.management.AddField(TB_SAIDA, nome, tipo)
+
+
 def criar():
     if arcpy.Exists(TB_SAIDA):
+        garantir_campos()
         return
     print("criando a tabela %s..." % TB_SAIDA)
     arcpy.management.CreateTable(SDE, "EPOCA_PLANTIO_TALHAO")
@@ -166,7 +186,7 @@ def classificar():
         if not info:
             sem_plantio += 1
             continue
-        safra, data = info
+        safra, data, fonte = info
         if hasattr(data, "date"):
             data = data.date()
         if not faixa:
@@ -201,7 +221,7 @@ def classificar():
             motivo = ("Talhao dividido entre unidades de manejo: a "
                       "predominante cobre so %.0f%% da area" % pct)
 
-        linhas.append([chave, safra, data, periodo, um, faixa, mediana, pct,
+        linhas.append([chave, safra, data, fonte, periodo, um, faixa, mediana, pct,
                        classe, condicao, confianca, alternativa, motivo, agora])
         por_classe[classe] += 1
         por_confianca[confianca] += 1

@@ -46,7 +46,8 @@ arcpy.env.overwriteOutput = True
 FAZENDA = None
 
 SO_COM_LINHAS = True          # no corpo do relatorio, so talhoes com linhas
-GDB_RASTERS = r"D:\GEO\FALHAS\rasters.gdb"
+GDB_RASTERS = r"D:\GEO\FALHAS\rasters.gdb"        # rasters de calor antigos
+PASTA_RASTERS = r"D:\GEO\FALHAS\rasters_calor"    # .tif do mapa_calor_falhas
 
 PASTA_SAIDA = r"D:\GEO\FALHAS\relatorios"
 
@@ -123,20 +124,29 @@ def fazendas_acima_da_meta():
 
 
 def localizar_raster(cod_fazenda):
-    """Acha o raster de calor da fazenda na gdb, pelo padrao HEAT_<fazenda>_*.
-    Se houver mais de um voo, usa o mais recente pelo sufixo de data."""
-    if not arcpy.Exists(GDB_RASTERS):
-        return None
-    anterior = arcpy.env.workspace
-    arcpy.env.workspace = GDB_RASTERS
-    try:
-        candidatos = arcpy.ListRasters("HEAT_%s_*" % cod_fazenda) or []
-        candidatos = [c for c in candidatos if not c.startswith("HEAT_CLS")]
-    finally:
-        arcpy.env.workspace = anterior
+    """Acha o raster de calor mais recente da fazenda, pelo padrao
+    HEAT_<fazenda>_<data>: os .tif da PASTA_RASTERS, que a carga das linhas
+    refaz a cada entrega, e os antigos da GDB_RASTERS. A data do sufixo decide
+    - AAAAMMDD do voo nos antigos, AAAAMMDD_HHMMSS da carga nos novos."""
+    prefixo = "HEAT_%s_" % cod_fazenda
+    candidatos = []
+    if os.path.isdir(PASTA_RASTERS):
+        for nome in os.listdir(PASTA_RASTERS):
+            if nome.upper().startswith(prefixo) and nome.lower().endswith(".tif"):
+                candidatos.append((nome[len(prefixo):-4],
+                                   os.path.join(PASTA_RASTERS, nome)))
+    if arcpy.Exists(GDB_RASTERS):
+        anterior = arcpy.env.workspace
+        arcpy.env.workspace = GDB_RASTERS
+        try:
+            for nome in arcpy.ListRasters(prefixo + "*") or []:
+                candidatos.append((nome[len(prefixo):],
+                                   os.path.join(GDB_RASTERS, nome)))
+        finally:
+            arcpy.env.workspace = anterior
     if not candidatos:
         return None
-    return os.path.join(GDB_RASTERS, sorted(candidatos)[-1])
+    return max(candidatos)[1]
 
 
 def ler_dados(fazenda, exigir_linhas=None):
