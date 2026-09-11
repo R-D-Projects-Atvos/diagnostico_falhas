@@ -1,8 +1,11 @@
 # Relatório de falhas sob demanda — passo a passo
 
-Atalho: `D:\GEO\CODIGOS\GERAR_RELATORIO_FALHAS.bat`
+Atalho: `D:\GEO\REPOS\diagnostico_falhas\GERAR_RELATORIO_FALHAS.bat`
 
 Liberado para: **João, Mateus, Leonardo e Rafael Miranda**.
+
+A ferramenta roda direto deste repositório. **Não copie os arquivos para
+`D:\GEO\CODIGOS`** — lá ficou só um aviso apontando para cá.
 
 ---
 
@@ -64,7 +67,7 @@ Cada geração ganha uma pasta nova. Duas pessoas podem gerar a mesma fazenda no
 | `fazenda ... nao encontrada na base do relatorio` | código não existe na base | confira o código |
 | `nao tem resultado de falhas publicado no PIMS` | a fazenda ainda não tem percentual oficial | não há o que gerar |
 | `Relatorio : ... SEM mapa` | a fazenda não tem linhas de falha carregadas | pode gerar: sai com o percentual do PIMS e sem o mapa |
-| `Esta conta nao esta liberada` | sua conta não está na lista | peça para incluí-la em `USUARIOS_LIBERADOS`, no topo de `solicitar_relatorio_falhas.py` |
+| `Esta conta nao esta liberada` | sua conta não está na lista | peça para incluí-la em `USUARIOS_LIBERADOS`, no topo de `src\relatorio\solicitar_relatorio_falhas.py` |
 | `Nao consegui carregar o ArcGIS` | Pro sem login ou sem licença nesta conta | abra o ArcGIS Pro, faça login e tente de novo |
 | `PDF: nao gerado` | o navegador não conseguiu imprimir | abra o `.html` da pasta e imprima com Ctrl+P, em A4 paisagem |
 | `ERRO na fazenda ...` | falha inesperada | a mensagem fica no seu arquivo de registro; não repasse relatório dessa tentativa |

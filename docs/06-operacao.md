@@ -5,6 +5,10 @@
 Tudo roda no Python do ArcGIS Pro (`arcgispro-py3`). Nada precisa ser
 instalado além do que já vem com o Pro.
 
+**A produção roda deste clone**, em `D:\GEO\REPOS\diagnostico_falhas`, na `main`.
+Não há cópia dos scripts em `D:\GEO\CODIGOS` — lá ficaram só avisos. Mudança
+entra por commit e `git pull` no clone.
+
 ```
 "C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\python.exe"
 ```

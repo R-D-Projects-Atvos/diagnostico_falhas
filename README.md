@@ -112,10 +112,28 @@ python -u src/relatorio/gerar_relatorio_falhas.py           # lote
 python -u src/relatorio/gerar_relatorio_falhas.py 320127    # uma fazenda
 
 # ou, no servidor, sob demanda e com conferência da fazenda antes de gerar
-D:\GEO\CODIGOS\GERAR_RELATORIO_FALHAS.bat                   # ver docs/08
+D:\GEO\REPOS\diagnostico_falhas\GERAR_RELATORIO_FALHAS.bat  # ver docs/08
 ```
 
 Ordem, dependências e agendamento em [`docs/06-operacao.md`](docs/06-operacao.md).
+
+---
+
+## Onde as coisas ficam
+
+| O quê | Onde |
+|---|---|
+| Este repositório — **a produção roda daqui**, na `main` | `D:\GEO\REPOS\diagnostico_falhas` |
+| Relatórios do lote | `D:\GEO\FALHAS\relatorios` |
+| Relatórios sob demanda | `D:\GEO\FALHAS\sob_demanda` |
+| Rasters do mapa de calor | `D:\GEO\FALHAS\rasters.gdb` |
+| Registro do relatório sob demanda | `D:\GEO\LOGS` |
+
+**Não copie os scripts para `D:\GEO\CODIGOS`.** Lá ficaram só avisos apontando
+para cá. Para atualizar a produção, `git pull` neste clone.
+
+A conexão `D:\GEO\TALHOES\SQLServer-10-gisdb(atvospublicador).sde` fica fora do
+repositório: carrega credencial.
 
 ---
 

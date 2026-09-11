@@ -15,10 +15,10 @@ servidor, uma conta nao consegue regravar arquivo criado por outra; na pasta
 padrao do gerador (fazenda_data), gerar a mesma fazenda que um colega no
 mesmo dia falharia no meio.
 
-Passo a passo: D:\\GEO\\CODIGOS\\LEIA-ME_RELATORIO_FALHAS.md
+Passo a passo: docs\\08-relatorio-sob-demanda.md, neste repositorio
 
-Uso: duplo clique em D:\\GEO\\CODIGOS\\GERAR_RELATORIO_FALHAS.bat
-     ou  python -u solicitar_relatorio_falhas.py [fazenda]
+Uso: duplo clique em D:\\GEO\\REPOS\\diagnostico_falhas\\GERAR_RELATORIO_FALHAS.bat
+     ou  propy -u src\\relatorio\\solicitar_relatorio_falhas.py [fazenda]
 
 Geotecnologia / Cartografia - Atvos
 """
