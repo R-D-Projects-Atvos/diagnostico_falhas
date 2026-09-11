@@ -12,6 +12,10 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
   Rafael Miranda. Ver `docs/08-relatorio-sob-demanda.md`.
 - A produção passa a rodar do clone em `D:\GEO\REPOS\diagnostico_falhas`; em
   `D:\GEO\CODIGOS` ficam só avisos apontando para cá.
+- Atualização diária do clima: `ATUALIZAR_CLIMA.bat`, agendado às 6h, carrega o
+  monitoramento Zeus da planilha de `ENTRADAS\CLIMA` (com conferência antes de
+  apagar e cópia da tabela), refaz o vínculo talhão–estação e os indicadores.
+  A consulta do Excel foi guardada em `sql/monitoramento_zeus.sql`.
 
 ### Corrigido
 
