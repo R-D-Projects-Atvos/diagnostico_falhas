@@ -4,6 +4,13 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
 
 ## [Em andamento]
 
+### Adicionado
+
+- Relatório sob demanda no servidor: `GERAR_RELATORIO_FALHAS.bat` pede o código
+  da fazenda, mostra o que encontrou para conferência e gera o PDF numa pasta
+  própria por usuário e por execução. Liberado para João, Mateus, Leonardo e
+  Rafael Miranda. Ver `docs/08-relatorio-sob-demanda.md`.
+
 ### Corrigido
 
 - Chuva antes do plantio: janela sem nenhum registro na estação era gravada como

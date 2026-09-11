@@ -72,6 +72,7 @@ rodar de novo quando a base ganhar datas de plantio.
 | `carga_matriz_plantio` | quando a matriz for revisada | |
 | `classificar_epoca_plantio` | diária | acompanha a `DATA_PLANTIO` da base |
 | `criar_view_relatorio` | só quando a definição mudar | |
+| `solicitar_relatorio_falhas` | sob demanda | pelo `GERAR_RELATORIO_FALHAS.bat`; ver [08](08-relatorio-sob-demanda.md) |
 | `gerar_relatorio_falhas` | sob demanda | ou após novas cargas |
 
 Para agendar: a tarefa precisa rodar com o usuário do Windows que tem o Pro
