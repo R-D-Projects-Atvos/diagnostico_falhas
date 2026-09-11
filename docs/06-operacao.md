@@ -43,6 +43,9 @@ classificar_epoca_plantio ───────────────┤
 
 O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` existir.
 O `indicadores_clima_talhao` depende do vínculo e do monitoramento.
+
+Monitoramento, vínculo e clima rodam juntos, nessa ordem, pelo
+`ATUALIZAR_CLIMA.bat` — ver [atualização diária do clima](#atualização-diária-do-clima).
 O `criar_view_relatorio` depende de todas as tabelas existirem.
 
 A cadeia do solo e da época de plantio, em ordem:
@@ -65,9 +68,10 @@ rodar de novo quando a base ganhar datas de plantio.
 |---|---|---|
 | `carga_status_report` | diária | junto com a rotina das 5h |
 | `sincronizar_surveys_vant` | diária | escreve no Portal a cada execução |
-| `carga_estacoes_zeus` | diária | quando migrar das planilhas para o BQ |
-| `vincular_talhao_estacao` | diária | rápido; reajusta se a rede mudar |
-| `indicadores_clima_talhao` | diária | |
+| `carga_estacoes_zeus` | quando o cadastro das estações mudar | só o cadastro |
+| `carga_monitoramento_zeus` | diária, 6h | pelo `ATUALIZAR_CLIMA.bat` agendado |
+| `vincular_talhao_estacao` | diária, 6h | pelo `ATUALIZAR_CLIMA.bat` |
+| `indicadores_clima_talhao` | diária, 6h | pelo `ATUALIZAR_CLIMA.bat` |
 | `carga_linhas_falha` | por entrega | manual hoje |
 | `mapa_calor_falhas` | por entrega | |
 | `carga_mancha_solos` | quando a mancha mudar | camada de referência |
@@ -81,6 +85,40 @@ rodar de novo quando a base ganhar datas de plantio.
 
 Para agendar: a tarefa precisa rodar com o usuário do Windows que tem o Pro
 autenticado no geoportal, porque a conexão usa `GIS("pro")`.
+
+## Atualização diária do clima
+
+Tarefa `\GEOTECNOLOGIA\atualizar_clima`, todo dia às **6h**, depois da
+atualização da base das 5h (que leva de 7 a 28 minutos): o vínculo e o clima
+dependem dela. Roda o `ATUALIZAR_CLIMA.bat` da raiz do clone:
+
+1. `carga_monitoramento_zeus.py --gravar` → `MONITORAMENTO_ESTACAO`
+2. `vincular_talhao_estacao.py` → `TALHAO_ESTACAO`
+3. `indicadores_clima_talhao.py` → `INDICADORES_CLIMA_TALHAO`
+
+Cada etapa só roda se a anterior terminou bem. Log em
+`D:\GEO\LOGS\atualizacao_clima_<data>_<conta>.log`.
+
+**De onde vem a chuva, por enquanto.** O servidor ainda não lê o BigQuery.
+Quem tem a conexão no próprio computador abre a planilha de monitoramento no
+Excel, clica em **Atualizar tudo** e salva em
+`Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\CLIMA`. A tarefa das 6h carrega o que
+estiver lá. Sem atualizar o Excel, ela recarrega o mesmo conteúdo — e o log
+avisa quando a planilha termina mais de 3 dias antes de ontem.
+
+**O que protege a tabela.** A carga apaga e regrava. Antes de apagar, compara a
+planilha com o banco e **não grava nada** se a planilha tiver colunas diferentes,
+menos dias, menos estações, menos linhas ou estação+dia repetido. Antes de
+gravar, copia a tabela para `D:\GEO\FALHAS\clima_backup.gdb`; se a gravação
+falhar no meio, devolve a cópia.
+
+Para rodar à mão:
+
+```
+propy -u src\carga\carga_monitoramento_zeus.py            (simula)
+propy -u src\carga\carga_monitoramento_zeus.py --gravar   (grava)
+ATUALIZAR_CLIMA.bat                                       (as três etapas)
+```
 
 ## Parâmetros a revisar
 
@@ -98,6 +136,8 @@ autenticado no geoportal, porque a conexão usa `GIS("pro")`.
 | `carga_matriz_plantio` | `PLANILHA` | `D:\GEO\SOLOS\matriz_plantio.xlsx` | fora do repositório |
 | `declividade_talhao` | `MARGEM_FRONTEIRA` | 0,5 ponto percentual | |
 | `vincular_talhao_manejo` | `PCT_MINIMO_ALERTA` | 60% | repetido como número solto no `classificar_epoca_plantio` |
+| `carga_monitoramento_zeus` | `PASTA_ENTRADA` | `ENTRADAS\CLIMA` no OneDrive do João | só existe na conta que sincroniza a pasta |
+| `carga_monitoramento_zeus` | `DIAS_SEM_ATUALIZAR_ALERTA` | 3 | a partir daí o log avisa que o Excel não foi atualizado |
 
 ## Problemas conhecidos e como resolver
 
@@ -151,6 +191,14 @@ renomeados para maiúscula. Não faça isso — ver `SOLOS_ATVOS` no
 
 **Declividade vazia na `TALHAO_MANEJO`.** O vínculo com a mancha rodou depois da
 declividade e regravou a tabela. Rode o `declividade_talhao` de novo.
+
+**`NADA FOI GRAVADO` na carga do monitoramento.** A conferência achou a planilha
+menor que o banco — o motivo vem logo abaixo. A tabela não foi tocada. Quase
+sempre é a consulta do Excel atualizada pela metade ou editada: atualize de novo
+e salve.
+
+**`ALERTA: a planilha termina em ...`** A chuva não chega sozinha enquanto o
+servidor não lê o BigQuery. Atualize a planilha no Excel.
 
 ## Validação após execução
 

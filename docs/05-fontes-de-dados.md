@@ -96,8 +96,16 @@ valor padrão não editado).
 
 ## 5. Zeus — estações meteorológicas
 
-**Origem atual:** duas planilhas exportadas do BigQuery (provisório).
-**Origem definitiva:** `dl-bq-prd.silver_zeus`.
+**Cadastro das estações:** planilha exportada uma vez de `dl-bq-prd.bronze_zeus.pics`.
+Muda raramente; recarregue com `carga_estacoes_zeus.py` só quando mudar.
+
+**Monitoramento diário:** planilha que o Excel atualiza com a consulta de
+[`sql/monitoramento_zeus.sql`](../sql/monitoramento_zeus.sql) (Power Query, ODBC ao BigQuery) e
+salva em `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\CLIMA`. É carregada todo dia
+pelo `carga_monitoramento_zeus.py`, dentro do `ATUALIZAR_CLIMA.bat`.
+
+**Origem definitiva:** a mesma consulta, rodando direto no BigQuery. Hoje o
+servidor não tem login válido no BigQuery — ver [pendências](07-pendencias.md).
 
 Tabelas relevantes do `silver_zeus`:
 
@@ -127,7 +135,8 @@ metade da rede calculando e a outra metade não.
 
 A `areas` **não traz CAD nem tipo de solo** — só identificação.
 
-**Carga:** `src/carga/carga_estacoes_zeus.py`.
+**Carga:** `src/carga/carga_estacoes_zeus.py` (cadastro) e
+`src/carga/carga_monitoramento_zeus.py` (diário).
 
 ## 6. Mancha de solos
 
