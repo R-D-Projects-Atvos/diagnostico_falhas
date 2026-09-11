@@ -5,9 +5,16 @@ Calcula os indicadores climaticos da janela de brotacao por talhao.
 Cria/atualiza:
   ATVOSPUBLICADOR.INDICADORES_CLIMA_TALHAO   uma linha por chavesig
 
-A janela e de 0 a 30 dias apos o plantio - e nela que a maior parte da falha
-se origina. Os indicadores sao os que dependem SO de precipitacao e
-temperatura; balanco hidrico (ARM/CAD) fica para quando houver CAD do solo.
+Duas janelas:
+
+  PRE  (-30 a -1 DAP): a umidade do solo no dia do plantio depende do que
+       choveu antes. Solo que vinha seco ha semanas nao germina bem nem com
+       chuva boa depois; solo ja carregado responde rapido.
+
+  POS  (0 a 30 DAP): brotacao - e nela que a maior parte da falha se origina.
+
+Os indicadores sao os que dependem SO de precipitacao e temperatura; balanco
+hidrico (ARM/CAD) fica para quando houver CAD do solo.
 
 Cada indicador vem acompanhado da media da UNIDADE na mesma safra. Numero
 sozinho nao diagnostica nada: 18 mm de chuva so significa alguma coisa ao
@@ -39,8 +46,10 @@ TB_VINCULO = SDE + r"\ATVOSPUBLICADOR.TALHAO_ESTACAO"
 TB_DIARIO = SDE + r"\ATVOSPUBLICADOR.MONITORAMENTO_ESTACAO"
 TB_SAIDA = SDE + r"\ATVOSPUBLICADOR.INDICADORES_CLIMA_TALHAO"
 
-JANELA_DIAS = 30          # janela de brotacao
+JANELA_DIAS = 30          # janela de brotacao (0 a 30 DAP)
 JANELA_CURTA = 15         # sub-janela critica
+JANELA_PRE = 30           # janela ANTES do plantio
+JANELA_PRE_CURTA = 15     # ultimos dias antes do plantio
 VERANICO_MM = 5.0         # dia "seco": chuva abaixo disso
 TMAX_QUENTE = 35.0        # dia de calor extremo
 RAIO_CONFIAVEL_KM = 15.0
@@ -50,10 +59,13 @@ CAMPOS = [
     ("DT_PLANTIO", "DATE", None),
     ("PIC_ID", "LONG", None), ("ESTACAO_NOME", "TEXT", 40),
     ("DISTANCIA_KM", "DOUBLE", None), ("CONFIABILIDADE", "TEXT", 12),
+    ("CHUVA_PRE_15", "DOUBLE", None), ("CHUVA_PRE_30", "DOUBLE", None),
+    ("DIAS_SEM_DADO_PRE", "LONG", None),
     ("CHUVA_0_15", "DOUBLE", None), ("CHUVA_0_30", "DOUBLE", None),
     ("DIAS_COM_CHUVA", "LONG", None), ("MAIOR_VERANICO", "LONG", None),
     ("TMAX_MEDIA", "DOUBLE", None), ("DIAS_TMAX_ALTA", "LONG", None),
     ("UMID_MEDIA", "DOUBLE", None), ("DIAS_SEM_DADO", "LONG", None),
+    ("CHUVA_PRE_30_UNID", "DOUBLE", None),
     ("CHUVA_0_15_UNID", "DOUBLE", None), ("CHUVA_0_30_UNID", "DOUBLE", None),
     ("DIAS_CHUVA_UNID", "DOUBLE", None), ("VERANICO_UNID", "DOUBLE", None),
     ("DATA_CALCULO", "DATE", None),
@@ -62,6 +74,7 @@ CAMPOS = [
 
 def criar():
     if arcpy.Exists(TB_SAIDA):
+        garantir_campos()
         return
     print("criando INDICADORES_CLIMA_TALHAO")
     arcpy.management.CreateTable(SDE, "INDICADORES_CLIMA_TALHAO")
@@ -71,6 +84,19 @@ def criar():
         else:
             arcpy.management.AddField(TB_SAIDA, nome, tipo)
     arcpy.management.AddIndex(TB_SAIDA, ["CHAVESIG"], "IDX_ICT_CHAVESIG")
+
+
+def garantir_campos():
+    """Acrescenta campos novos numa tabela que ja existe, sem recriar."""
+    existentes = {f.name.upper() for f in arcpy.ListFields(TB_SAIDA)}
+    for nome, tipo, tam in CAMPOS:
+        if nome.upper() in existentes:
+            continue
+        print("  acrescentando campo %s" % nome)
+        if tam:
+            arcpy.management.AddField(TB_SAIDA, nome, tipo, field_length=tam)
+        else:
+            arcpy.management.AddField(TB_SAIDA, nome, tipo)
 
 
 def ler_diario():
@@ -108,6 +134,26 @@ def ler_talhoes():
             talhoes.append((str(chave).strip(), unidade, safra, plantio.date()))
     print("talhoes com data de plantio: %d" % len(talhoes))
     return talhoes
+
+
+def indicadores_pre(serie, plantio):
+    """Chuva na janela ANTERIOR ao plantio: de -JANELA_PRE ate a vespera.
+    O dia do plantio nao entra aqui - ele abre a janela pos."""
+    chuva_pre = chuva_pre_curta = 0.0
+    sem_dado = 0
+    for i in range(JANELA_PRE, 0, -1):
+        dia = plantio - datetime.timedelta(days=i)
+        registro = serie.get(dia)
+        if registro is None:
+            sem_dado += 1
+            continue
+        chuva = registro[0] or 0.0
+        chuva_pre += chuva
+        if i <= JANELA_PRE_CURTA:
+            chuva_pre_curta += chuva
+    return {"chuva_pre15": round(chuva_pre_curta, 1),
+            "chuva_pre30": round(chuva_pre, 1),
+            "sem_dado_pre": sem_dado}
 
 
 def indicadores(serie, plantio):
@@ -177,6 +223,7 @@ def calcular():
             continue
 
         ind = indicadores(serie, plantio)
+        ind.update(indicadores_pre(serie, plantio))
         if ind["sem_dado"] > JANELA_DIAS:      # janela inteira fora da serie
             fora_periodo += 1
             continue
@@ -201,18 +248,20 @@ def medias_por_unidade(resultados):
     for chave, unidade, safra, _, _, _, _, _, ind in resultados:
         k = (unidade, safra)
         acc = somas.setdefault(k, {"n": 0, "c15": 0.0, "c30": 0.0,
-                                   "dc": 0, "ver": 0})
+                                   "dc": 0, "ver": 0, "pre30": 0.0})
         acc["n"] += 1
         acc["c15"] += ind["chuva15"]
         acc["c30"] += ind["chuva30"]
         acc["dc"] += ind["dias_chuva"]
         acc["ver"] += ind["veranico"]
+        acc["pre30"] += ind["chuva_pre30"]
 
     medias = {}
     for k, a in somas.items():
         n = float(a["n"])
         medias[k] = (round(a["c15"] / n, 1), round(a["c30"] / n, 1),
-                     round(a["dc"] / n, 1), round(a["ver"] / n, 1))
+                     round(a["dc"] / n, 1), round(a["ver"] / n, 1),
+                     round(a["pre30"] / n, 1))
     print("  grupos unidade+safra   : %d" % len(medias))
     return medias
 
@@ -222,12 +271,13 @@ def gravar(resultados, medias, agora):
     nomes = [c[0] for c in CAMPOS]
     with arcpy.da.InsertCursor(TB_SAIDA, nomes) as ins:
         for chave, unidade, safra, plantio, pic, nome, dist, conf, ind in resultados:
-            m = medias.get((unidade, safra), (None, None, None, None))
+            m = medias.get((unidade, safra), (None, None, None, None, None))
             ins.insertRow([
                 chave, unidade, safra, plantio, pic, nome, dist, conf,
+                ind["chuva_pre15"], ind["chuva_pre30"], ind["sem_dado_pre"],
                 ind["chuva15"], ind["chuva30"], ind["dias_chuva"],
                 ind["veranico"], ind["tmax"], ind["quentes"], ind["umid"],
-                ind["sem_dado"], m[0], m[1], m[2], m[3], agora,
+                ind["sem_dado"], m[4], m[0], m[1], m[2], m[3], agora,
             ])
     print("gravados: %d" % len(resultados))
 
@@ -237,10 +287,10 @@ def conferir():
               "32012700010006", "32012700010007"]
     campo = arcpy.AddFieldDelimiters(TB_SAIDA, "CHAVESIG")
     onde = "%s IN (%s)" % (campo, ",".join("'%s'" % p for p in piloto))
-    campos = ["CHAVESIG", "ESTACAO_NOME", "DISTANCIA_KM", "CONFIABILIDADE",
-              "CHUVA_0_15", "CHUVA_0_30", "CHUVA_0_30_UNID",
-              "DIAS_COM_CHUVA", "MAIOR_VERANICO", "VERANICO_UNID",
-              "TMAX_MEDIA", "DIAS_SEM_DADO"]
+    campos = ["CHAVESIG", "ESTACAO_NOME", "DISTANCIA_KM",
+              "CHUVA_PRE_30", "CHUVA_PRE_30_UNID", "DIAS_SEM_DADO_PRE",
+              "CHUVA_0_30", "CHUVA_0_30_UNID",
+              "DIAS_COM_CHUVA", "MAIOR_VERANICO", "DIAS_SEM_DADO"]
     print("\n=== area piloto (plantio em 03/03/2026) ===")
     print(" | ".join(campos))
     with arcpy.da.SearchCursor(TB_SAIDA, campos, onde) as cur:

@@ -2,6 +2,44 @@
 
 Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
 
+## [0.2] — agosto/2026
+
+Solo, declividade e época de plantio no relatório, para USL-UEL, e janela de
+chuva antes do plantio. Em produção desde 31/08/2026; versionada em 11/09/2026.
+
+### Adicionado
+
+- Mancha de solos publicada no geodatabase como `SOLOS_ATVOS` (1.260 polígonos,
+  USL-UEL).
+- Vínculo talhão–unidade de manejo pela mancha predominante em área
+  (`TALHAO_MANEJO`, 7.050 talhões).
+- Declividade por talhão sobre o Copernicus GLO-30, pela mediana (ADR 0008).
+- Matriz de Plantio carregada da planilha, lida pela cor das células
+  (`MATRIZ_PLANTIO`, 714 combinações).
+- Classificação da época de plantio por talhão, com condição de manejo e
+  ressalva quando a classe poderia ser outra (`EPOCA_PLANTIO_TALHAO`, 5.520
+  talhões; ADR 0009).
+- Janela de chuva de −30 a −1 DAP, com média da unidade.
+- Na view: unidade de manejo, declividade, época de plantio, ressalva e
+  `EPOCA_FORA_DA_INDICADA` (ADR 0010).
+- No relatório: bloco "Época de plantio" com a faixa do ano; unidade de manejo e
+  declividade no cabeçalho; mapa das linhas de falha como vieram da Bem Agro;
+  gráfico e leitura de chuva cobrindo antes e depois do plantio.
+
+### Alterado
+
+- O relatório sai com o percentual do PIMS mesmo quando a fazenda não tem linhas
+  de falha carregadas, sem o detalhamento espacial.
+- Altura máxima das figuras de mapa reduzida, para os dois mapas caberem na
+  página 2.
+
+### Conhecido e não resolvido
+
+Chuva antes do plantio gravada como zero quando a estação não tem registro;
+bloco de época montado com o primeiro talhão; ressalva de fronteira aplicada
+longe da fronteira; talhões fora do inventário sem classe; mancha de solos
+incompleta em USL-UEL. Ver `docs/07-pendencias.md`.
+
 ## [0.1] — agosto/2026
 
 Primeira versão funcional. Relatório gerado de ponta a ponta para a área

@@ -277,6 +277,21 @@ ressalva. O corte **não é aplicado na carga**, só na exibição — o víncul
 sempre gravado, e finalidades diferentes podem adotar raios diferentes sem
 recalcular nada.
 
+### 6.6 Janela antes do plantio
+
+A umidade do solo no dia do plantio depende do que choveu antes. Solo que vinha
+seco há semanas não germina bem nem com chuva boa depois; solo já carregado
+responde rápido.
+
+Por isso há uma segunda janela, de −30 a −1 DAP. O dia do plantio não entra
+nela: ele abre a janela de brotação. `CHUVA_PRE_15` e `CHUVA_PRE_30` somam os
+últimos 15 e 30 dias, e `DIAS_SEM_DADO_PRE` conta os dias sem registro. A média
+da unidade vem em `CHUVA_PRE_30_UNID`, como nos demais indicadores.
+
+**Limitação conhecida:** quando a estação não registrou nenhum dia da janela, o
+acumulado é gravado como 0,0 mm, não como ausente — e esse zero entra na média
+da unidade. Ver [pendências](07-pendencias.md).
+
 ---
 
 ## 7. Seleção de quais relatórios gerar
@@ -311,3 +326,129 @@ dobraria o número de falhas sem ninguém perceber.
 
 **Archiving.** Nenhuma tabela reescrita diariamente deve ter archiving ligado.
 A `BASE_SAFRA` tem, e acumulou 3,4 milhões de linhas para 25.710 feições.
+
+---
+
+## 9. Solo, declividade e época de plantio
+
+Escopo: **só USL-UEL**, a região coberta pela mancha de solos e pela Matriz de
+Plantio.
+
+### 9.1 A unidade de manejo vem da mancha de solos
+
+O talhão recebe a unidade de manejo (`Num_Manejo`, 1 a 14) da mancha de solos
+publicada em `SOLOS_ATVOS`. O `Num_Manejo` é a chave da Matriz de Plantio: o
+texto do agrupamento de solos bate exatamente entre as duas fontes, então a
+junção é direta, sem de-para.
+
+A mancha fica no geodatabase, e não num shapefile, para que o vínculo seja
+recalculável. Enquanto ela vivia na pasta de alguém, o vínculo era uma foto do
+dia em que alguém rodou.
+
+### 9.2 Unidade predominante em área
+
+Um talhão pode cair sobre mais de uma mancha. A regra é a unidade que ocupa a
+**maior área** dentro dele. O percentual dessa unidade é gravado em `PCT_AREA`,
+para que se saiba quando o vínculo é limpo (100%) e quando o talhão está
+dividido entre solos.
+
+A interseção roda em UTM 22S. No dataset, em coordenadas geográficas, a área
+sairia em graus quadrados e não serviria para comparar manchas.
+
+Entram inventário e database, para que o vínculo sirva também a outras
+análises. Dos 7.050 talhões vinculados, 3.554 caem sobre mais de uma mancha, e
+em 738 a predominante cobre menos de 60% da área.
+
+### 9.3 Declividade: mediana sobre o Copernicus
+
+A declividade do talhão é a **mediana** dos pixels de declividade percentual,
+calculada sobre o Copernicus GLO-30 suavizado por média 3 × 3. A mediana ignora
+os pixels espúrios que a vegetação gera num modelo de superfície. Ver
+[ADR 0008](adr/0008-declividade-copernicus.md).
+
+A faixa é gravada no texto exato da matriz:
+
+| Mediana | Faixa |
+|---|---|
+| abaixo de 2,5% | `< 2,5%` |
+| de 2,5% até abaixo de 5% | `2,5 a 5%` |
+| 5% ou mais | `> 5%` |
+
+Quando a mediana está a até 0,5 ponto de 2,5% ou de 5%, `DECLIV_CONFIANCA` é
+`Ressalva`. São 36% dos talhões.
+
+### 9.4 A Matriz de Plantio
+
+Para cada unidade de manejo e faixa de declividade, a matriz diz se cada período
+do ano é `Favoravel`, `Aceitavel`, `Restritivo` ou `Favoravel com irrigacao`.
+Janeiro a maio são divididos em quinzenas; junho a dezembro valem o mês inteiro.
+A primeira quinzena vai do dia 1 ao 15.
+
+Na planilha, a classe está na **cor de fundo** da célula. O texto são asteriscos
+que representam **condições de manejo**:
+
+| Marcador | Condição |
+|---|---|
+| `**` | exige cobertura vegetal bem formada |
+| `***` | exige cobertura bem formada e dessecada com antecedência |
+| `****` | evitar solo argiloso em período de frio intenso |
+
+"Aceitável `**`" não quer dizer que a época foi adequada: quer dizer que seria,
+**se** a cobertura estivesse bem formada. Por isso a condição acompanha a classe
+na tabela e no relatório.
+
+### 9.5 Classificação do talhão
+
+```
+período = período da matriz que contém a DATA_PLANTIO da BASE_SAFRA
+classe  = MATRIZ_PLANTIO[unidade de manejo, faixa de declividade, período]
+```
+
+A data de plantio vem do **inventário vigente**, não do PIMS. Talhão sem data de
+plantio no inventário, sem faixa de declividade ou sem regra na matriz não é
+classificado.
+
+Distribuição dos 5.520 talhões classificados:
+
+| Classe | Talhões | % |
+|---|---|---|
+| `Restritivo` | 1.881 | 34,1% |
+| `Favoravel` | 1.457 | 26,4% |
+| `Favoravel com irrigacao` | 1.185 | 21,5% |
+| `Aceitavel` | 997 | 18,1% |
+
+1.189 deles carregam condição: 513 exigem cobertura bem formada e dessecada, 505
+cobertura bem formada, e 171 trazem o alerta de solo argiloso no frio.
+
+### 9.6 Ressalva só quando a classe poderia ser outra
+
+A classificação recebe `Ressalva` quando, **na faixa de declividade vizinha, a
+recomendação para o mesmo período seria outra**. A classe alternativa vai em
+`CLASSE_ALTERNATIVA`. Também recebe `Ressalva` quando a unidade predominante
+cobre menos de 60% do talhão.
+
+Herdar a ressalva da declividade marcaria um terço dos talhões, e ninguém lê um
+alerta tão frequente. Ver [ADR 0009](adr/0009-ressalva-so-quando-muda-a-classe.md).
+
+Hoje são 4.062 classificações `Boa` e 1.458 `Ressalva` — 984 por declividade e
+474 por talhão dividido.
+
+**Limitação conhecida:** a versão atual testa a faixa vizinha em todo talhão,
+sem olhar se a mediana está perto da fronteira. Ver [pendências](07-pendencias.md).
+
+### 9.7 O que é "fora da época indicada"
+
+`EPOCA_FORA_DA_INDICADA` vale 1 só para `Restritivo`. `Favoravel com irrigacao`
+não conta: é plantio de inverno, prática deliberada, que a matriz considera
+adequada quando há irrigação ou salvamento. Somar os dois exageraria o problema.
+Ver [ADR 0010](adr/0010-irrigacao-nao-e-fora-da-epoca.md).
+
+### 9.8 No relatório
+
+A época ganha bloco próprio na página 1, com a faixa do ano inteiro pintada
+conforme a matriz e o período do plantio marcado. Como campo de texto no meio de
+doze outros, ela passava despercebida — justamente o indicador que aponta causa
+fora do clima.
+
+**Limitação conhecida:** o bloco é montado com o primeiro talhão da fazenda. Ver
+[pendências](07-pendencias.md).

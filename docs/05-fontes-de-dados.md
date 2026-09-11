@@ -129,7 +129,63 @@ A `areas` **não traz CAD nem tipo de solo** — só identificação.
 
 **Carga:** `src/carga/carga_estacoes_zeus.py`.
 
-## 6. Fontes ainda não integradas
+## 6. Mancha de solos
+
+**Origem:** `Mancha_Solos.shp`, na pasta do projeto na biblioteca de documentos
+da Cartografia (`Projetos_Cart\DIAGNOSTICO_FALHAS`). SIRGAS 2000 / UTM 22S.
+
+1.260 polígonos, cerca de 196 mil ha, cobrindo **só a região de USL-UEL**. Nem
+ali a cobertura é total: 3.109 dos 3.400 talhões vigentes da UEL (91%) e 3.510
+dos 4.649 da USL (75%) caem em alguma mancha. A fazenda 328307, da USL, fica
+inteira de fora.
+
+Campos: `Num_Manejo` (1 a 14), `Manejo`, `solo`, `Textura`, `Saturacao`,
+`Amb_Atvos`, `Amb_Athena`.
+
+**Carga:** `src/carga/carga_mancha_solos.py`, para a camada `SOLOS_ATVOS`.
+
+## 7. Matriz de Plantio
+
+**Origem:** planilha `matriz_plantio.xlsx`, aba `Matriz Plantio`, lida de
+`D:\GEO\SOLOS`, fora do repositório. Validada no Encontro de Campo Grande, na
+discussão da Cartilha Agronômica Atvos.
+
+Cobre **apenas USL-UEL**: 14 unidades de manejo × 3 faixas de declividade × 17
+períodos.
+
+Pontos de atenção descobertos:
+
+- **A classificação está na cor de fundo da célula**, não no texto. Lida com
+  `pandas`, a planilha parece vazia.
+- O vermelho aparece de duas formas — RGB `FFFF0000` e cor indexada 10 —,
+  conforme a célula foi pintada pela paleta antiga ou pelo seletor de cor. Um
+  leitor que conheça só uma delas perde células restritivas sem erro nenhum.
+- O texto das células são asteriscos que representam **condições de manejo**
+  (`**`, `***`, `****`), não parte da classe.
+- Janeiro a maio são quinzenais; junho a dezembro, mensais.
+- A coluna `Agrupamento solos` é um rótulo do grupo, não uma lista completa de
+  códigos de solo, e não serve como de-para. O vínculo com o talhão vem da
+  mancha de solos, pelo `Num_Manejo`.
+
+**Carga:** `src/carga/carga_matriz_plantio.py`, substituição total.
+
+## 8. Modelo de elevação — Copernicus GLO-30
+
+**Origem:** bucket público da AWS, `https://copernicus-dem-30m.s3.amazonaws.com`.
+GeoTIFF em tiles de 1 × 1 grau, 30 m, sem credencial.
+
+Escolhido no lugar do SRTM: mesma resolução, erro vertical de 2 a 4 m contra 6 a
+16 m e imageamento de 2011–2015 contra 2000. Ver
+[ADR 0008](adr/0008-declividade-copernicus.md).
+
+**É modelo de superfície**: inclui a vegetação. Cana alta no momento do
+imageamento vira relevo.
+
+Os tiles são baixados uma vez para `D:\GEO\DEM`.
+
+**Uso:** `src/processamento/declividade_talhao.py`.
+
+## 9. Fontes ainda não integradas
 
 `pics_area` resolveria o vínculo talhão–estação pelo cadastro oficial da Zeus,
 em vez do nosso cálculo de proximidade — depende de casar o `areaId` com o

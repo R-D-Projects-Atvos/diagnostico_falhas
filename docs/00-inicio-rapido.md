@@ -5,7 +5,8 @@ Para quem acabou de chegar no projeto e precisa entender em quinze minutos.
 ## O que este produto faz
 
 Gera um relatório de diagnóstico das falhas de plantio, por fazenda, reunindo
-cinco fontes de dado que já existiam na Atvos mas nunca conversavam.
+fontes de dado que já existiam na Atvos mas nunca conversavam — do percentual
+oficial do PIMS à mancha de solos e à Matriz de Plantio.
 
 ## Leia nesta ordem
 
@@ -55,3 +56,5 @@ qualquer alteração. Valores esperados em [06 — Operação](06-operacao.md).
 | **CAD** | capacidade de água disponível do solo, em mm |
 | **ETo / ETc** | evapotranspiração de referência / da cultura |
 | **LengthComp** | comprimento da falha menos a tolerância de 0,30 m |
+| **Unidade de manejo** | agrupamento de solos da mancha, 1 a 14 em USL-UEL; a chave da Matriz de Plantio |
+| **Matriz de Plantio** | recomendação de época de plantio por unidade de manejo, faixa de declividade e período do ano |

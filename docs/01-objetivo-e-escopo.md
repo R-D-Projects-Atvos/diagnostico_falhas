@@ -24,16 +24,18 @@ Até aqui, o resultado era um número por talhão numa tabela. O que faltava:
 Um relatório de três páginas, em HTML e PDF, por fazenda:
 
 **Página 1 — Identificação e resultado.** Cadastro da área, dados do voo,
-quatro indicadores principais e a linha do tempo com plantio, porte, voo e
-publicação no PIMS.
+unidade de manejo e declividade, quatro indicadores principais, a época de
+plantio segundo a Matriz de Plantio — com o ano inteiro desenhado e o plantio
+marcado — e a linha do tempo com plantio, porte, voo e publicação no PIMS.
 
-**Página 2 — Distribuição das falhas.** Mapa de calor da densidade de falhas
-com escala fixa, tabela por talhão e a proporção da área em cada faixa de
-densidade.
+**Página 2 — Distribuição das falhas.** As falhas como vieram da Bem Agro,
+linha a linha, o mapa de calor da densidade com escala fixa, a tabela por
+talhão e a proporção da área em cada faixa de densidade.
 
-**Página 3 — Diagnóstico climático.** Chuva acumulada, dias com chuva e maior
-veranico da janela 0–30 DAP, cada um comparado à média da unidade na mesma
-safra, mais o gráfico de chuva diária.
+**Página 3 — Diagnóstico climático.** Chuva dos 30 dias antes do plantio, que
+diz em que umidade o solo estava, e chuva acumulada, dias com chuva e maior
+veranico da janela 0–30 DAP. Cada um comparado à média da unidade na mesma
+safra, mais o gráfico de chuva diária cobrindo as duas janelas.
 
 ## Público
 

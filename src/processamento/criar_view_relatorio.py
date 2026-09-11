@@ -11,6 +11,8 @@ Fontes:
   STG_VOO_MISSAO        voo que gerou o processamento
   STG_PORTE_AVALIACAO   avaliacao que autorizou o voo
   INDICADORES_CLIMA_TALHAO  chuva, veranico e temperatura na janela 0-30 DAP
+  TALHAO_MANEJO             unidade de manejo de solo e declividade do talhao
+  EPOCA_PLANTIO_TALHAO      classe da epoca de plantio segundo a matriz
 
 Decisoes:
   - O percentual exibido e SEMPRE o FALHA_LINHA do PIMS. Os metros das linhas
@@ -29,6 +31,8 @@ Decisoes:
   - Cada indicador climatico vem com a media da unidade ao lado. O relatorio
     deve exibir os dois: chuva de 96 mm so significa algo ao lado dos 147 mm
     que o resto da unidade recebeu.
+  - Ha duas janelas: PRE (-30 a -1 DAP), que diz em que condicao de umidade o
+    solo estava no plantio, e POS (0 a 30 DAP), a brotacao.
   - CLIMA_DIAS_SEM_DADO diz quantos dias da janela a estacao nao registrou.
     Valor alto pede desconfianca dos acumulados.
 
@@ -109,6 +113,10 @@ SELECT
     c.DISTANCIA_KM                AS ESTACAO_DIST_KM,
     c.CONFIABILIDADE              AS CLIMA_CONFIABILIDADE,
     c.DIAS_SEM_DADO               AS CLIMA_DIAS_SEM_DADO,
+    c.CHUVA_PRE_15                AS CHUVA_PRE_15,
+    c.CHUVA_PRE_30                AS CHUVA_PRE_30,
+    c.CHUVA_PRE_30_UNID           AS CHUVA_PRE_30_UNID,
+    c.DIAS_SEM_DADO_PRE           AS CLIMA_DIAS_SEM_DADO_PRE,
     c.CHUVA_0_15                  AS CHUVA_0_15,
     c.CHUVA_0_15_UNID             AS CHUVA_0_15_UNID,
     c.CHUVA_0_30                  AS CHUVA_0_30,
@@ -125,6 +133,35 @@ SELECT
     CASE WHEN c.CHUVA_0_30_UNID > 0
          THEN CAST(100.0 * c.CHUVA_0_30 / c.CHUVA_0_30_UNID AS DECIMAL(6,1))
     END                           AS CHUVA_VS_UNIDADE_PCT,
+
+    CASE WHEN c.CHUVA_PRE_30_UNID > 0
+         THEN CAST(100.0 * c.CHUVA_PRE_30 / c.CHUVA_PRE_30_UNID AS DECIMAL(6,1))
+    END                           AS CHUVA_PRE_VS_UNIDADE_PCT,
+
+    /* --- solo e epoca de plantio (Matriz de Plantio) ------------------- */
+    m.NUM_MANEJO                  AS UNIDADE_MANEJO,
+    m.MANEJO                      AS AGRUP_SOLOS,
+    m.TEXTURA                     AS TEXTURA_SOLO,
+    m.PCT_AREA                    AS MANEJO_PCT_AREA,
+    m.DECLIV_MEDIANA              AS DECLIVIDADE_PCT,
+    m.FAIXA_DECLIV                AS FAIXA_DECLIVIDADE,
+    e.PERIODO_PLANTIO             AS PERIODO_PLANTIO,
+    e.CLASSE_EPOCA                AS CLASSE_EPOCA,
+
+    /* a matriz classifica supondo manejo de cobertura; sem isso a classe
+       afirma mais do que a matriz diz - por isso a condicao vem junto */
+    e.CONDICAO                    AS EPOCA_CONDICAO,
+    e.EPOCA_CONFIANCA             AS EPOCA_CONFIANCA,
+    e.CLASSE_ALTERNATIVA          AS EPOCA_ALTERNATIVA,
+    e.MOTIVO_RESSALVA             AS EPOCA_MOTIVO_RESSALVA,
+
+    /* atalho para o semaforo do relatorio: plantio fora da epoca indicada.
+       "Favoravel com irrigacao" NAO entra aqui - e plantio de inverno, que
+       e pratica deliberada, e a matriz o considera adequado quando ha
+       irrigacao ou salvamento. Somar os dois exageraria o problema. */
+    CASE WHEN e.CLASSE_EPOCA = 'Restritivo' THEN 1
+         WHEN e.CLASSE_EPOCA IS NULL THEN NULL
+         ELSE 0 END               AS EPOCA_FORA_DA_INDICADA,
 
     b.Shape                       AS Shape,
     b.OBJECTID                    AS OBJECTID
@@ -173,6 +210,14 @@ OUTER APPLY (
 /* indicadores da janela 0-30 DAP, ja com a media da unidade ao lado */
 LEFT JOIN ATVOSPUBLICADOR.INDICADORES_CLIMA_TALHAO AS c
        ON c.CHAVESIG = s.Layer
+
+/* solo: uma linha por talhao, ja resolvida pela unidade predominante */
+LEFT JOIN ATVOSPUBLICADOR.TALHAO_MANEJO AS m
+       ON m.CHAVESIG = s.Layer
+
+/* epoca: depende de manejo + declividade + data de plantio */
+LEFT JOIN ATVOSPUBLICADOR.EPOCA_PLANTIO_TALHAO AS e
+       ON e.CHAVESIG = s.Layer
 """.format(meta=META_PCT, atencao=LIMITE_ATENCAO)
 
 

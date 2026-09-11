@@ -28,15 +28,30 @@ Porte + Registro de Missão ─► STG_PORTE_AVALIACAO      │        │
                                                        │        └─► PDF
 Planilhas Zeus                carga_estacoes_zeus      │
 (BigQuery, provisório)    ──► ESTACOES_ZEUS            │   mapa de calor (PNG)
-                              MONITORAMENTO_ESTACAO    │   chuva diária (PNG)
-                                     │                 │
+                              MONITORAMENTO_ESTACAO    │   linhas de falha (PNG)
+                                     │                 │   chuva diária (PNG)
                                      ▼                 │
                               vincular_talhao_estacao  │
                               TALHAO_ESTACAO           │
                                      │                 │
                                      ▼                 │
                               indicadores_clima_talhao │
-                              INDICADORES_CLIMA_TALHAO ┘
+                              INDICADORES_CLIMA_TALHAO ┤
+                                                       │
+Mancha_Solos.shp              carga_mancha_solos       │
+(USL-UEL)                 ──► SOLOS_ATVOS              │
+                                     │                 │
+                                     ▼                 │
+                              vincular_talhao_manejo   │
+Copernicus GLO-30         ──► declividade_talhao       │
+(AWS, público)                TALHAO_MANEJO            │
+                                     │                 │
+Planilha Matriz Plantio       carga_matriz_plantio     │
+(cor da célula)           ──► MATRIZ_PLANTIO           │
+                                     │                 │
+                                     ▼                 │
+                              classificar_epoca_plantio│
+                              EPOCA_PLANTIO_TALHAO ────┘
 ```
 
 ## Componentes
@@ -58,12 +73,16 @@ vazia. Sem isso, uma falha de conexão zeraria a tabela de produção.
 ### Camada de processamento (`src/processamento/`)
 
 Deriva dado a partir do que foi carregado: vínculo espacial talhão–estação,
-indicadores climáticos, mapa de calor e a view consolidada.
+indicadores climáticos, mapa de calor, vínculo talhão–unidade de manejo,
+declividade, classificação da época de plantio e a view consolidada.
 
 ### Camada de relatório (`src/relatorio/`)
 
 Lê a view, desenha as figuras com matplotlib e monta o HTML por substituição
 de marcadores. O PDF sai do próprio HTML, impresso por navegador headless.
+
+A faixa do ano da Matriz de Plantio não é figura: é desenhada em HTML e CSS,
+com uma consulta à `MATRIZ_PLANTIO` na hora de gerar o relatório.
 
 ## Decisões de tecnologia
 
@@ -83,7 +102,7 @@ Windows, respeita `@page { size: A4 landscape }` e não exige instalar nada.
 Alternativas como wkhtmltopdf ou weasyprint exigiriam aprovação de software.
 
 **Por que view e não tabela materializada.** A view sempre reflete o estado
-atual das cinco fontes. As tabelas por trás dela já são materializadas, então
+atual de todas as fontes. As tabelas por trás dela já são materializadas, então
 o custo de consulta é baixo. Se um dia o volume crescer, a materialização é
 uma troca simples.
 
@@ -100,6 +119,9 @@ Consequências:
   vem em graus quadrados. Sempre usar os campos de área do cadastro.
 - O **kernel density exige projeção**. O mapa de calor projeta para
   SIRGAS 2000 / UTM 21S (EPSG 31981) em memória; só o raster fica projetado.
+- **Área de mancha e declividade** usam SIRGAS 2000 / UTM 22S (EPSG 31982). A
+  interseção talhão × mancha de solos roda em memória; o modelo de elevação
+  reamostrado para 30 m fica em `D:\GEO\DEM\declividade.gdb`.
 
 ## Autenticação
 
@@ -107,3 +129,10 @@ Os scripts que acessam o Portal usam `GIS("pro")`, aproveitando a sessão já
 autenticada do ArcGIS Pro. Não há senha em arquivo. Consequência para
 agendamento: a tarefa precisa rodar com o usuário do Windows que tem o Pro
 conectado ao geoportal.
+
+## Dependência de rede
+
+O `declividade_talhao` baixa o modelo de elevação do bucket público do
+Copernicus na AWS, sem credencial. Os tiles ficam em `D:\GEO\DEM` e só são
+baixados na primeira execução. Se a rede corporativa bloquear o bucket, os
+arquivos podem ser copiados à mão para essa pasta.

@@ -4,8 +4,9 @@ Produto interno da equipe de **Cartografia — Geotecnologia / Atvos**.
 
 Gera, por fazenda, um relatório de diagnóstico das falhas de plantio da cana,
 reunindo o percentual oficial publicado no PIMS, o detalhamento espacial das
-falhas levantadas por VANT, o registro do voo e da avaliação de porte, e os
-indicadores climáticos da janela de brotação.
+falhas levantadas por VANT, o registro do voo e da avaliação de porte, os
+indicadores climáticos antes e depois do plantio e a época de plantio frente à
+Matriz de Plantio.
 
 O relatório sai em HTML e PDF, em A4 paisagem, e é gerado apenas para as
 fazendas cuja média ponderada de falhas está acima da meta corporativa.
@@ -24,9 +25,11 @@ sempre:
    chuva não significa nada.
 3. **O processo funcionou?** Quantos dias entre o porte aprovado e o voo,
    entre o voo e a publicação do resultado.
+4. **A época de plantio era a indicada?** A Matriz de Plantio diz, para cada
+   unidade de manejo de solo e faixa de declividade, quando plantar. É o
+   indicador que aponta causa fora do clima.
 
-O produto responde às três a partir de dados que já existiam na empresa,
-espalhados por cinco sistemas.
+O produto responde às quatro a partir de dados que já existiam na empresa.
 
 ---
 
@@ -55,7 +58,8 @@ Detalhes em [`docs/02-arquitetura.md`](docs/02-arquitetura.md).
 | Percentual oficial (PIMS via BigQuery) | em produção, 4.611 talhões |
 | Linhas de falha e mapa de calor | funcionando; 1 área carregada (piloto) |
 | Voo e porte (Survey123) | em produção; cobertura baixa por preenchimento |
-| Indicadores climáticos | em produção, 4.604 talhões |
+| Indicadores climáticos | em produção, 4.604 talhões, janelas antes e depois do plantio |
+| Solo, declividade e época de plantio | em produção só para USL-UEL, 5.520 talhões; problemas conhecidos em [pendências](docs/07-pendencias.md) |
 | Balanço hídrico / CAD | **bloqueado** — ver [pendências](docs/07-pendencias.md) |
 | Ortomosaico no relatório | espaço reservado, sem decisão |
 
@@ -83,16 +87,27 @@ python -u src/processamento/vincular_talhao_estacao.py
 # 5. indicadores climáticos da janela 0-30 DAP
 python -u src/processamento/indicadores_clima_talhao.py
 
-# 6. linhas de falha de uma entrega da Bem Agro
+# 6. mancha de solos e vínculo talhão -> unidade de manejo
+python -u src/carga/carga_mancha_solos.py
+python -u src/processamento/vincular_talhao_manejo.py
+
+# 7. declividade (sempre depois do vínculo, que regrava a tabela)
+python -u src/processamento/declividade_talhao.py
+
+# 8. Matriz de Plantio e classificação da época de plantio
+python -u src/carga/carga_matriz_plantio.py
+python -u src/processamento/classificar_epoca_plantio.py
+
+# 9. linhas de falha de uma entrega da Bem Agro
 python -u src/carga/carga_linhas_falha.py
 
-# 7. mapa de calor da entrega
+# 10. mapa de calor da entrega
 python -u src/processamento/mapa_calor_falhas.py
 
-# 8. view consolidada
+# 11. view consolidada
 python -u src/processamento/criar_view_relatorio.py
 
-# 9. relatórios
+# 12. relatórios
 python -u src/relatorio/gerar_relatorio_falhas.py           # lote
 python -u src/relatorio/gerar_relatorio_falhas.py 320127    # uma fazenda
 ```
