@@ -49,25 +49,6 @@ circulando.
 
 ## Dívidas técnicas
 
-### Chuva antes do plantio: ausência gravada como zero
-
-Quando a estação não registrou nenhum dia da janela de −30 a −1 DAP, o
-`indicadores_clima_talhao` grava `CHUVA_PRE_30 = 0,0` em vez de nulo. Acontece
-em 210 dos 4.604 talhões. A janela depois do plantio já descarta esse caso; a de
-antes, não.
-
-Consequências:
-
-- O relatório afirma que a área não recebeu chuva antes do plantio. Na área
-  piloto, a estação USL_320121 não tem nenhum registro entre 31/01 e 02/03/2026,
-  e o texto compara 0 mm com os 146,3 mm da média da unidade. A nota de dias sem
-  registro aparece, mas o número principal está errado.
-- Os zeros entram na `CHUVA_PRE_30_UNID` e puxam a média da unidade para baixo.
-
-Proposta: gravar nulo quando `DIAS_SEM_DADO_PRE` cobrir a janela inteira,
-excluir esses talhões da média da unidade e, no relatório, trocar a frase por
-"sem registro na estação".
-
 ### Bloco de época montado com o primeiro talhão
 
 O gerador monta o bloco "Época de plantio" e a unidade de manejo do cabeçalho

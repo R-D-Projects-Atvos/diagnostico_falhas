@@ -2,6 +2,15 @@
 
 Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
 
+## [Em andamento]
+
+### Corrigido
+
+- Chuva antes do plantio: janela sem nenhum registro na estação era gravada como
+  0,0 mm, e o relatório afirmava que não tinha chovido. Agora fica nula, fora da
+  média da unidade, e o relatório diz que não há registro. A área piloto
+  (320127) estava nesse caso.
+
 ## [0.2] — agosto/2026
 
 Solo, declividade e época de plantio no relatório, para USL-UEL, e janela de

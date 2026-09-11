@@ -501,6 +501,57 @@ def comparativo(rotulo, valor, media, unidade="", invertido=False):
                  fmt(media), unidade)
 
 
+def vazio(v):
+    """O SQL devolve nulo como None ou como texto vazio, conforme o driver."""
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+def sem_registro(rotulo):
+    """Linha no lugar da barra quando a estacao nao registrou a janela.
+
+    Sem ela o indicador simplesmente sumiria do bloco, e quem le nao saberia
+    se a janela foi ignorada ou se nao ha dado."""
+    return """
+    <div class="comp">
+      <div class="top"><span>%s</span><span class="v" style="color:#6B7378">sem registro</span></div>
+      <div class="leg">A estacao nao registrou nenhum dia desta janela.</div>
+    </div>""" % rotulo
+
+
+def leitura_clima(r0):
+    """Os dois primeiros paragrafos da leitura da pagina 3.
+
+    Janela sem registro ganha frase propria: formatado no meio da frase, o
+    valor ausente virava "&mdash; mm", e antes disso a carga gravava 0,0 e o
+    relatorio afirmava que nao tinha chovido."""
+    # sem nenhuma das duas janelas o talhao nem tem estacao com serie: dizer
+    # que "a estacao nao registrou" suporia uma estacao que nao existe
+    if vazio(r0.get("CHUVA_PRE_30")) and vazio(r0.get("CHUVA_0_30")):
+        return "<p>Nao ha dado climatico para a janela de plantio desta area.</p>"
+
+    if vazio(r0.get("CHUVA_PRE_30")):
+        antes = ("A estacao nao tem registro dos 30 dias que antecederam o "
+                 "plantio: nao ha como dizer em que umidade o solo estava "
+                 "quando foi plantado.")
+    else:
+        antes = ("Nos 30 dias que antecederam o plantio a area recebeu "
+                 "<b>%s mm</b>, contra %s mm da media da unidade &mdash; e a "
+                 "condicao de umidade em que o solo estava quando foi plantado."
+                 % (fmt(r0.get("CHUVA_PRE_30")),
+                    fmt(r0.get("CHUVA_PRE_30_UNID"))))
+
+    if vazio(r0.get("CHUVA_0_30")):
+        depois = "Nao ha dado climatico para os 30 dias apos o plantio."
+    else:
+        depois = ("Nos 30 dias seguintes recebeu <b>%s%%</b> da chuva media da "
+                  "unidade, com temperatura maxima media de %s &deg;C."
+                  % (fmt(r0.get("CHUVA_VS_UNIDADE_PCT"), 0),
+                     fmt(r0.get("TMAX_MEDIA"))))
+
+    return ('<p>%s</p>\n          <p style="margin-top:8px">%s</p>'
+            % (antes, depois))
+
+
 CORES_EPOCA = {
     "Favoravel": "#2E7D5B",
     "Favorável": "#2E7D5B",
@@ -686,9 +737,13 @@ def montar_html(registros, res, nome_png, classes, nome_chuva, nome_linhas):
 
     clima = ""
     if r0["CHUVA_0_30"] is not None:
-        clima = (comparativo("Chuva 30 dias ANTES do plantio",
-                             r0.get("CHUVA_PRE_30"),
-                             r0.get("CHUVA_PRE_30_UNID"), " mm")
+        if vazio(r0.get("CHUVA_PRE_30")):
+            antes = sem_registro("Chuva 30 dias ANTES do plantio")
+        else:
+            antes = comparativo("Chuva 30 dias ANTES do plantio",
+                                r0.get("CHUVA_PRE_30"),
+                                r0.get("CHUVA_PRE_30_UNID"), " mm")
+        clima = (antes
                  + comparativo("Chuva 0-15 DAP", r0["CHUVA_0_15"],
                              r0["CHUVA_0_15_UNID"], " mm")
                  + comparativo("Chuva 0-30 DAP", r0["CHUVA_0_30"],
@@ -705,7 +760,9 @@ def montar_html(registros, res, nome_png, classes, nome_chuva, nome_linhas):
     faltas = []
     if r0["CLIMA_DIAS_SEM_DADO"]:
         faltas.append("%d dias apos o plantio" % r0["CLIMA_DIAS_SEM_DADO"])
-    if r0.get("CLIMA_DIAS_SEM_DADO_PRE"):
+    # janela anterior inteira sem registro ja tem frase propria na leitura;
+    # aqui entra so a falta parcial, que afeta o acumulado
+    if r0.get("CLIMA_DIAS_SEM_DADO_PRE") and not vazio(r0.get("CHUVA_PRE_30")):
         faltas.append("%d dias antes" % r0["CLIMA_DIAS_SEM_DADO_PRE"])
     if faltas:
         ressalva = ("<p class='nota'>A estacao nao registrou %s. Os acumulados "
@@ -741,8 +798,7 @@ def montar_html(registros, res, nome_png, classes, nome_chuva, nome_linhas):
                                          r0.get("FAIXA_DECLIVIDADE")))
                         if r0.get("DECLIVIDADE_PCT") is not None else "&mdash;"),
         "bloco_epoca": bloco_epoca(r0),
-        "chuva_pre": fmt(r0.get("CHUVA_PRE_30")),
-        "chuva_pre_unid": fmt(r0.get("CHUVA_PRE_30_UNID")),
+        "leitura": leitura_clima(r0),
         "tabela": linhas_tabela, "clima": clima, "ressalva": ressalva,
         "mapa": ('<img class="mapa" src="%s" alt="Mapa de calor">' % nome_png)
                 if nome_png else
@@ -955,13 +1011,7 @@ img.mapa{max-height:56mm;object-fit:contain;break-inside:avoid;page-break-inside
         <div class="chuva">%(grafico_chuva)s</div>
         <div class="eyebrow" style="margin-top:14px">Leitura</div>
         <div class="caixa">
-          <p>Nos 30 dias que antecederam o plantio a area recebeu
-          <b>%(chuva_pre)s mm</b>, contra %(chuva_pre_unid)s mm da media da
-          unidade &mdash; e a condicao de umidade em que o solo estava quando
-          foi plantado.</p>
-          <p style="margin-top:8px">Nos 30 dias seguintes recebeu
-          <b>%(chuva_pct)s%%</b> da chuva media da unidade, com temperatura
-          maxima media de %(tmax)s &deg;C.</p>
+          %(leitura)s
           <p style="margin-top:8px">O percentual de falhas ficou em
           <b>%(falha)s%%</b>, contra meta de %(meta)s%%. Compare os dois: chuva
           proxima da media com falha alta aponta para causa operacional,
