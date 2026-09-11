@@ -168,25 +168,18 @@ O `mapa_calor_falhas.py` ainda usa 300/600/900. O gerador já aplica
 
 A chuva entra por uma planilha que alguém atualiza no Excel. A consulta já está
 no repositório ([`sql/monitoramento_zeus.sql`](../sql/monitoramento_zeus.sql)) e a
-carga já está agendada; o que falta é o **servidor conseguir ler o BigQuery**.
-Em 11/09/2026:
+carga já está agendada.
 
-- a conexão ODBC de sistema `Google BigQuery` existe, mas está sem configuração;
-- a conexão ODBC `dl-bq-prd`, da conta do João, tem o token recusado (`invalid_grant`);
-- a conexão do ArcGIS com o `gold_arcgis` trava esperando login.
+**Dá para sair do Excel** (confirmado em 11/09/2026): a conexão do ArcGIS que fica
+no OneDrive do João — a do `atualizar_base.py` e do percentual oficial — lê o
+`bronze_zeus`, com o monitoramento até o dia corrente. Falta trocar a
+`ler_origem` do `carga_monitoramento_zeus.py` para rodar a consulta por ela. A
+conexão só funciona na conta do João.
 
-Caminhos:
-
-1. **Conta de serviço** do Google Cloud com leitura em `bronze_zeus` e
-   `gold_arcgis`, configurada na conexão de sistema. Não depende de pessoa.
-2. **Renovar o login** da conta do João na conexão `dl-bq-prd`. Resolve na hora,
-   mas volta a expirar e só vale para a conta dele.
-
-Com o acesso, só a `ler_origem` do `carga_monitoramento_zeus.py` muda.
-
-O mesmo bloqueio parou o **percentual oficial**: o `carga_status_report.py` usa a
-conexão do ArcGIS que trava, e a `STATUS_REPORT_VANT` não é atualizada desde
-26/08/2026.
+As outras conexões do servidor não servem: a ODBC de sistema `Google BigQuery`
+está sem configuração, a ODBC `dl-bq-prd` da conta do João tem o token recusado
+(`invalid_grant`), e a cópia da conexão do ArcGIS em `D:\GEO\TALHOES` trava
+esperando login.
 
 Enquanto o cadastro das estações não for recarregado, o **status** de cada estação
 (OK, intermitente, falha) fica como estava na exportação — e é ele que decide

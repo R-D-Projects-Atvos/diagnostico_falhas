@@ -8,25 +8,43 @@ Cria/atualiza:
   ATVOSPUBLICADOR.STG_VOO_MISSAO       - uma linha por TALHAO voado
   ATVOSPUBLICADOR.LOG_CHAVESIG_SURVEYS - registro das correcoes no Portal
 
+Surveys de producao (confirmados em 11/09/2026):
+  "Avaliacao de Porte Cana - Pilotos ATVOS"  item b2b4a34c14f24f2a9ca3a22a43154ad5
+  "Registro de Missao - VANT"                item 55646b00864c4d458a5a8e4d0aa1d289
+
 Ordem de cada survey:
   1. le pai + repeat do Portal
   2. reconstroi o chavesig de cod_fazenda + cod_setor + cod_talhao
-  3. grava o staging (independe do que o formulario gravou)
+  3. confere o que foi lido contra o staging atual - so entao apaga e regrava
   4. corrige no Portal as linhas divergentes e registra no log
 
 O passo 4 escreve em producao a cada execucao. Por isso o log: toda alteracao
 fica com data, valor anterior e valor novo.
 
-Uso: python C:\\temp\\sincronizar_surveys_vant.py
+Sem --gravar, so simula: le o Portal, mostra quantas linhas iriam para o
+staging e quantas seriam corrigidas no Portal, e nao grava nada em lugar
+nenhum.
+
+Uso:
+  propy -u src\\carga\\sincronizar_surveys_vant.py            (simula)
+  propy -u src\\carga\\sincronizar_surveys_vant.py --gravar   (grava)
+
+Codigo de saida: 0 = ok | 1 = algum survey nao foi gravado (conferencia ou erro)
 
 Geotecnologia / Cartografia - Atvos
 """
 
 import datetime
 import functools
+import os
+import sys
+
 import arcpy
 from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, Table
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from protecao import motivo_para_nao_gravar, regravar  # noqa: E402
 
 # saida sem buffer: as mensagens aparecem conforme acontecem
 print = functools.partial(print, flush=True)
@@ -78,20 +96,29 @@ CAMPOS_LOG = [
 ]
 
 
+def caminho(nome):
+    return SDE + "\\ATVOSPUBLICADOR." + nome
+
+
 def criar(nome, campos, indice="CHAVESIG"):
-    caminho = SDE + "\\ATVOSPUBLICADOR." + nome
-    if arcpy.Exists(caminho):
-        return caminho
+    destino = caminho(nome)
+    if arcpy.Exists(destino):
+        return destino
     print("criando %s" % nome)
     arcpy.management.CreateTable(SDE, nome)
     for c, tipo, tam in campos:
         if tam:
-            arcpy.management.AddField(caminho, c, tipo, field_length=tam)
+            arcpy.management.AddField(destino, c, tipo, field_length=tam)
         else:
-            arcpy.management.AddField(caminho, c, tipo)
+            arcpy.management.AddField(destino, c, tipo)
     if indice:
-        arcpy.management.AddIndex(caminho, [indice], "IDX_%s" % nome[:10])
-    return caminho
+        arcpy.management.AddIndex(destino, [indice], "IDX_%s" % nome[:10])
+    return destino
+
+
+def contar(nome):
+    destino = caminho(nome)
+    return int(arcpy.management.GetCount(destino)[0]) if arcpy.Exists(destino) else 0
 
 
 def dominios(camada):
@@ -127,6 +154,28 @@ def chavesig(fazenda, setor, talhao):
     return "".join(partes)
 
 
+def consultar_tudo(camada, out_fields):
+    """Todas as feicoes da camada, em lotes.
+
+    O servico devolve no maximo maxRecordCount feicoes por consulta, e a
+    consulta simples parava ali sem aviso: em 11/09/2026 a missao tinha 1.676
+    linhas de talhao e chegavam 1.000. A lista de ids nao tem esse limite, entao
+    busca os ids e depois as feicoes de lote em lote - e confere o total."""
+    ids = camada.query(where="1=1", return_ids_only=True).get("objectIds") or []
+    lote = int(camada.properties.get("maxRecordCount") or 1000)
+    feicoes = []
+    for i in range(0, len(ids), lote):
+        bloco = ids[i:i + lote]
+        feicoes.extend(camada.query(object_ids=",".join(str(x) for x in bloco),
+                                    out_fields=out_fields,
+                                    return_geometry=False).features)
+    esperado = camada.query(where="1=1", return_count_only=True)
+    if len(feicoes) != esperado:
+        raise RuntimeError("lidas %d de %d feicoes em %s - leitura incompleta, "
+                           "nada gravado" % (len(feicoes), esperado, camada.url))
+    return feicoes
+
+
 def ler_survey(gis, url_srv, campos_pai):
     """Devolve (linhas, dominios, tabela_filho).
 
@@ -137,17 +186,14 @@ def ler_survey(gis, url_srv, campos_pai):
     doms = dominios(pai)
 
     pais = {}
-    for f in pai.query(where="1=1", out_fields=",".join(campos_pai),
-                       return_geometry=False).features:
+    for f in consultar_tudo(pai, ",".join(campos_pai)):
         a = f.attributes
         chave = (a.get("uniquerowid") or "").upper()
         if chave:
             pais[chave] = a
 
     linhas = []
-    for f in filho.query(where="1=1",
-                         out_fields="objectid,parentrowid,cod_talhao,chavesig",
-                         return_geometry=False).features:
+    for f in consultar_tudo(filho, "objectid,parentrowid,cod_talhao,chavesig"):
         a = f.attributes
         p = pais.get((a.get("parentrowid") or "").upper())
         if not p:
@@ -162,7 +208,7 @@ def ler_survey(gis, url_srv, campos_pai):
     return linhas, doms, filho
 
 
-def corrigir_origem(filho, linhas, nome_survey, log_caminho, agora):
+def corrigir_origem(filho, linhas, nome_survey, log_caminho, agora, gravar):
     """Grava no Portal o chavesig reconstruido, onde divergir."""
     edicoes = [{"attributes": {"objectid": a["objectid"], "chavesig": chv}}
                for _, a, chv in linhas
@@ -171,6 +217,9 @@ def corrigir_origem(filho, linhas, nome_survey, log_caminho, agora):
 
     if not edicoes:
         print("  origem ja consistente - nada a corrigir")
+        return
+    if not gravar:
+        print("  SIMULACAO: %d linhas seriam corrigidas no Portal" % len(edicoes))
         return
 
     print("  corrigindo %d linhas no Portal..." % len(edicoes))
@@ -194,67 +243,80 @@ def corrigir_origem(filho, linhas, nome_survey, log_caminho, agora):
     print("  gravadas %d de %d (log em %s)" % (ok, len(registros), TB_LOG))
 
 
-def sincronizar_porte(gis, log_caminho, agora):
+def gravar_staging(nome, campos, novas, sem_chave, gravar):
+    """Confere antes de apagar. Devolve False se o staging nao foi gravado."""
+    atuais = contar(nome)
+    print("  staging: %d linhas lidas | no banco: %d | sem chavesig: %d"
+          % (len(novas), atuais, sem_chave))
+    motivo = motivo_para_nao_gravar(len(novas), atuais)
+    if motivo:
+        print("  NADA FOI GRAVADO: %s" % motivo)
+        return False
+    if gravar:
+        regravar(criar(nome, campos), [c[0] for c in campos], novas)
+        print("  staging regravado")
+    return True
+
+
+def sincronizar_porte(gis, log_caminho, agora, gravar):
     print("\n=== Avaliacao de Porte ===")
-    destino = criar(TB_PORTE, CAMPOS_PORTE)
     campos = ["uniquerowid", "cod_fazenda", "cod_setor", "dt_avaliacao",
               "piloto", "porte_adequado", "obs_campo", "previsao_retorno",
               "qtd_talhoes"]
     linhas, doms, filho = ler_survey(gis, SRV_PORTE, campos)
 
-    arcpy.management.DeleteRows(destino)
-    sem_chave = 0
-    with arcpy.da.InsertCursor(destino, [c[0] for c in CAMPOS_PORTE]) as ins:
-        for p, a, chv in linhas:
-            if not chv:
-                sem_chave += 1
-            ins.insertRow([
-                chv, str(p.get("cod_fazenda")), str(p.get("cod_setor")),
-                str(a.get("cod_talhao")), local(p.get("dt_avaliacao")),
-                doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
-                limpa(p.get("porte_adequado")), limpa(p.get("obs_campo")),
-                local(p.get("previsao_retorno")), limpa(p.get("qtd_talhoes")),
-                p.get("uniquerowid"), agora,
-            ])
-    print("  staging: %d linhas | sem chavesig: %d" % (len(linhas), sem_chave))
+    novas, sem_chave = [], 0
+    for p, a, chv in linhas:
+        if not chv:
+            sem_chave += 1
+        novas.append([
+            chv, str(p.get("cod_fazenda")), str(p.get("cod_setor")),
+            str(a.get("cod_talhao")), local(p.get("dt_avaliacao")),
+            doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
+            limpa(p.get("porte_adequado")), limpa(p.get("obs_campo")),
+            local(p.get("previsao_retorno")), limpa(p.get("qtd_talhoes")),
+            p.get("uniquerowid"), agora,
+        ])
 
+    if not gravar_staging(TB_PORTE, CAMPOS_PORTE, novas, sem_chave, gravar):
+        return False
     if CORRIGIR_ORIGEM:
-        corrigir_origem(filho, linhas, "porte", log_caminho, agora)
+        corrigir_origem(filho, linhas, "porte", log_caminho, agora, gravar)
+    return True
 
 
-def sincronizar_voo(gis, log_caminho, agora):
+def sincronizar_voo(gis, log_caminho, agora, gravar):
     print("\n=== Registro de Missao ===")
-    destino = criar(TB_VOO, CAMPOS_VOO)
     campos = ["uniquerowid", "cod_fazenda", "cod_setor", "dt_saida",
               "dt_retorno", "piloto", "vant_id", "tipo_missao",
               "resultado_missao", "obs_gerais"]
     linhas, doms, filho = ler_survey(gis, SRV_MISSAO, campos)
 
-    arcpy.management.DeleteRows(destino)
-    sem_chave = 0
-    with arcpy.da.InsertCursor(destino, [c[0] for c in CAMPOS_VOO]) as ins:
-        for p, a, chv in linhas:
-            if not chv:
-                sem_chave += 1
-            saida, retorno = local(p.get("dt_saida")), local(p.get("dt_retorno"))
-            dur = None
-            if saida and retorno:
-                dur = round((retorno - saida).total_seconds() / 3600.0, 2)
-            ins.insertRow([
-                chv, str(p.get("cod_fazenda")), str(p.get("cod_setor")),
-                str(a.get("cod_talhao")), saida, retorno, dur,
-                doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
-                doms.get("vant_id", {}).get(p.get("vant_id"), p.get("vant_id")),
-                doms.get("tipo_missao", {}).get(p.get("tipo_missao"),
-                                                p.get("tipo_missao")),
-                doms.get("resultado_missao", {}).get(p.get("resultado_missao"),
-                                                     p.get("resultado_missao")),
-                limpa(p.get("obs_gerais")), p.get("uniquerowid"), agora,
-            ])
-    print("  staging: %d linhas | sem chavesig: %d" % (len(linhas), sem_chave))
+    novas, sem_chave = [], 0
+    for p, a, chv in linhas:
+        if not chv:
+            sem_chave += 1
+        saida, retorno = local(p.get("dt_saida")), local(p.get("dt_retorno"))
+        dur = None
+        if saida and retorno:
+            dur = round((retorno - saida).total_seconds() / 3600.0, 2)
+        novas.append([
+            chv, str(p.get("cod_fazenda")), str(p.get("cod_setor")),
+            str(a.get("cod_talhao")), saida, retorno, dur,
+            doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
+            doms.get("vant_id", {}).get(p.get("vant_id"), p.get("vant_id")),
+            doms.get("tipo_missao", {}).get(p.get("tipo_missao"),
+                                            p.get("tipo_missao")),
+            doms.get("resultado_missao", {}).get(p.get("resultado_missao"),
+                                                 p.get("resultado_missao")),
+            limpa(p.get("obs_gerais")), p.get("uniquerowid"), agora,
+        ])
 
+    if not gravar_staging(TB_VOO, CAMPOS_VOO, novas, sem_chave, gravar):
+        return False
     if CORRIGIR_ORIGEM:
-        corrigir_origem(filho, linhas, "missao", log_caminho, agora)
+        corrigir_origem(filho, linhas, "missao", log_caminho, agora, gravar)
+    return True
 
 
 def conferir():
@@ -264,25 +326,39 @@ def conferir():
                                    "DURACAO_H", "PILOTO"]),
                          (TB_PORTE, ["CHAVESIG", "DT_AVALIACAO",
                                      "PORTE_ADEQUADO", "PILOTO"])):
-        caminho = SDE + "\\ATVOSPUBLICADOR." + nome
-        campo = arcpy.AddFieldDelimiters(caminho, "CHAVESIG")
+        destino = caminho(nome)
+        campo = arcpy.AddFieldDelimiters(destino, "CHAVESIG")
         onde = "%s IN (%s)" % (campo, ",".join("'%s'" % p for p in piloto))
         print("\n=== %s - area piloto ===" % nome)
-        with arcpy.da.SearchCursor(caminho, campos, onde) as cur:
+        with arcpy.da.SearchCursor(destino, campos, onde) as cur:
             for linha in sorted(cur, key=lambda r: str(r[0])):
                 print("  " + " | ".join(str(v) for v in linha))
 
 
-if __name__ == "__main__":
+def main():
+    gravar = "--gravar" in sys.argv
+    print("=" * 64)
+    print(" SURVEYS DE VANT - %s"
+          % ("GRAVACAO" if gravar else "SIMULACAO (use --gravar para gravar)"))
+    print("=" * 64)
     print("conectando pela sessao do ArcGIS Pro...")
     conexao = GIS(PORTAL)
     print("conectado como:", conexao.users.me.username)
     print("portal:", conexao.properties.portalHostname)
-    print("corrigir origem no Portal:", CORRIGIR_ORIGEM)
+    print("corrigir origem no Portal:", CORRIGIR_ORIGEM and gravar)
 
-    log = criar(TB_LOG, CAMPOS_LOG, indice="DATA_EXEC")
+    log = criar(TB_LOG, CAMPOS_LOG, indice="DATA_EXEC") if gravar else None
     momento = datetime.datetime.now()
 
-    sincronizar_porte(conexao, log, momento)
-    sincronizar_voo(conexao, log, momento)
-    conferir()
+    ok_porte = sincronizar_porte(conexao, log, momento, gravar)
+    ok_voo = sincronizar_voo(conexao, log, momento, gravar)
+
+    if gravar:
+        conferir()
+    else:
+        print("\nSIMULACAO: nada gravado no banco nem no Portal.")
+    return 0 if (ok_porte and ok_voo) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

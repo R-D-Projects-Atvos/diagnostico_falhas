@@ -55,9 +55,9 @@ Detalhes em [`docs/02-arquitetura.md`](docs/02-arquitetura.md).
 
 | Bloco | Situação |
 |---|---|
-| Percentual oficial (PIMS via BigQuery) | em produção, 4.611 talhões |
+| Percentual oficial (PIMS via BigQuery) | em produção, atualizado todo dia às 6h |
 | Linhas de falha e mapa de calor | funcionando; 1 área carregada (piloto) |
-| Voo e porte (Survey123) | em produção; cobertura baixa por preenchimento |
+| Voo e porte (Survey123) | em produção, atualizado todo dia às 6h; cobertura baixa por preenchimento |
 | Indicadores climáticos | em produção, 4.604 talhões, janelas antes e depois do plantio; atualizados todo dia às 6h a partir da planilha do Excel |
 | Solo, declividade e época de plantio | em produção só para USL-UEL, 5.520 talhões; problemas conhecidos em [pendências](docs/07-pendencias.md) |
 | Balanço hídrico / CAD | **bloqueado** — ver [pendências](docs/07-pendencias.md) |
@@ -73,14 +73,14 @@ no Catalog. Todos os scripts rodam no `arcgispro-py3`.
 
 ```bash
 # 1. cópia local do percentual oficial (BigQuery -> SQL Server)
-python -u src/carga/carga_status_report.py
+python -u src/carga/carga_status_report.py --gravar        # sem --gravar, simula
 
 # 2. estações meteorológicas (só quando o cadastro mudar) e monitoramento diário
 python -u src/carga/carga_estacoes_zeus.py
 python -u src/carga/carga_monitoramento_zeus.py --gravar   # sem --gravar, simula
 
 # 3. staging dos surveys + correção do chavesig na origem
-python -u src/carga/sincronizar_surveys_vant.py
+python -u src/carga/sincronizar_surveys_vant.py --gravar   # sem --gravar, simula
 
 # 4. vínculo talhão -> estação (proximidade / cadastro)
 python -u src/processamento/vincular_talhao_estacao.py
@@ -88,7 +88,7 @@ python -u src/processamento/vincular_talhao_estacao.py
 # 5. indicadores climáticos da janela 0-30 DAP
 python -u src/processamento/indicadores_clima_talhao.py
 
-# o monitoramento, o 4 e o 5 rodam todo dia às 6h pelo ATUALIZAR_CLIMA.bat
+# o 1, o 3, o monitoramento, o 4 e o 5 rodam todo dia às 6h pelo ATUALIZAR_DIAGNOSTICO.bat
 
 # 6. mancha de solos e vínculo talhão -> unidade de manejo
 python -u src/carga/carga_mancha_solos.py
@@ -132,7 +132,7 @@ Ordem, dependências e agendamento em [`docs/06-operacao.md`](docs/06-operacao.m
 | Rasters do mapa de calor | `D:\GEO\FALHAS\rasters.gdb` |
 | Registro do relatório sob demanda | `D:\GEO\LOGS` |
 | Planilha de monitoramento Zeus (atualizada no Excel) | `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\CLIMA` |
-| Log da atualização diária do clima | `D:\GEO\LOGS\atualizacao_clima_<data>_<conta>.log` |
+| Log da atualização diária | `D:\GEO\LOGS\atualizacao_diagnostico_<data>_<conta>.log` |
 
 **Não copie os scripts para `D:\GEO\CODIGOS`.** Lá ficaram só avisos apontando
 para cá. Para atualizar a produção, `git pull` neste clone.

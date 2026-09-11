@@ -20,7 +20,9 @@ Pontos de atenção descobertos:
 - Sendo uma view, a lógica pode mudar na origem sem aviso. Vale saber quem a
   mantém.
 
-**Carga:** `src/carga/carga_status_report.py`, substituição total.
+**Carga:** `src/carga/carga_status_report.py`, substituição total, todo dia às 6h.
+Lê pela conexão do ArcGIS que fica no OneDrive do João e abre a tabela pelo nome
+completo (`dl-bq-prd.gold_arcgis.Operacao_Vant`).
 
 ## 2. Bem Agro — linhas de falha
 
@@ -87,7 +89,14 @@ staging.
 Muitos campos são rótulos de seção (`sec_*`, `nota_*`) que viraram coluna no
 serviço. A extração deve listar campos explicitamente, nunca `outFields=*`.
 
-**Carga:** `src/carga/sincronizar_surveys_vant.py`.
+**Carga:** `src/carga/sincronizar_surveys_vant.py`, todo dia às 6h. Os serviços
+acima são os dos itens de produção `b2b4a34c14f24f2a9ca3a22a43154ad5` (porte) e
+`55646b00864c4d458a5a8e4d0aa1d289` (missão), conferidos em 11/09/2026.
+
+O serviço devolve no máximo 1.000 registros por consulta e **não avisa quando
+corta**. A leitura é feita em lotes, pelos ids, e conferida contra a contagem do
+Portal; se não bater, nada é gravado. Até 11/09/2026 a missão chegava cortada:
+1.000 de 1.676 linhas de talhão.
 
 Problemas de qualidade observados: duração de voo de 1 minuto em missão
 marcada como concluída; campos opcionais alternando entre `null` e string
@@ -102,10 +111,11 @@ Muda raramente; recarregue com `carga_estacoes_zeus.py` só quando mudar.
 **Monitoramento diário:** planilha que o Excel atualiza com a consulta de
 [`sql/monitoramento_zeus.sql`](../sql/monitoramento_zeus.sql) (Power Query, ODBC ao BigQuery) e
 salva em `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\CLIMA`. É carregada todo dia
-pelo `carga_monitoramento_zeus.py`, dentro do `ATUALIZAR_CLIMA.bat`.
+pelo `carga_monitoramento_zeus.py`, dentro do `ATUALIZAR_DIAGNOSTICO.bat`.
 
-**Origem definitiva:** a mesma consulta, rodando direto no BigQuery. Hoje o
-servidor não tem login válido no BigQuery — ver [pendências](07-pendencias.md).
+**Origem definitiva:** a mesma consulta, rodando direto no BigQuery. A conexão
+que o percentual oficial usa já alcança o `bronze_zeus` — ver
+[pendências](07-pendencias.md).
 
 Tabelas relevantes do `silver_zeus`:
 
