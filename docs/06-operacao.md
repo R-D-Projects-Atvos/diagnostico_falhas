@@ -17,8 +17,10 @@ python -u caminho\do\script.py
 
 Sem o `-u`, o buffer segura tudo até o fim e o script parece travado.
 
-Requisitos: extensão **Spatial Analyst** (kernel density), conexão SDE para o
-SQL Server, conexão para o BigQuery e o Pro conectado ao geoportal.
+Requisitos: extensão **Spatial Analyst** (kernel density e declividade),
+conexão SDE para o SQL Server, conexão para o BigQuery, o Pro conectado ao
+geoportal e, na primeira execução da declividade, acesso ao bucket público do
+Copernicus na AWS.
 
 ## Dependências entre scripts
 
@@ -27,6 +29,7 @@ carga_status_report ────────────────────
 carga_estacoes_zeus ──► vincular_talhao_estacao ──► indicadores_clima ─┤
 sincronizar_surveys_vant ────────────────┤
 carga_linhas_falha ──► mapa_calor_falhas ┤
+classificar_epoca_plantio ───────────────┤
                                           ▼
                                    criar_view_relatorio
                                           │
@@ -37,6 +40,20 @@ carga_linhas_falha ──► mapa_calor_falhas ┤
 O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` existir.
 O `indicadores_clima_talhao` depende do vínculo e do monitoramento.
 O `criar_view_relatorio` depende de todas as tabelas existirem.
+
+A cadeia do solo e da época de plantio, em ordem:
+
+1. `carga_mancha_solos` → `SOLOS_ATVOS`
+2. `vincular_talhao_manejo` → `TALHAO_MANEJO` (regrava a tabela inteira)
+3. `declividade_talhao` → completa a `TALHAO_MANEJO`
+4. `carga_matriz_plantio` → `MATRIZ_PLANTIO` (independe dos anteriores)
+5. `classificar_epoca_plantio` → `EPOCA_PLANTIO_TALHAO` (depende de 3 e 4)
+
+**A ordem entre 2 e 3 importa.** O vínculo regrava a `TALHAO_MANEJO` e apaga a
+declividade que estava lá. Depois dele, rode sempre a declividade.
+
+O `classificar_epoca_plantio` usa a `DATA_PLANTIO` da `BASE_SAFRA`, então precisa
+rodar de novo quando a base ganhar datas de plantio.
 
 ## Frequência sugerida
 
@@ -49,6 +66,11 @@ O `criar_view_relatorio` depende de todas as tabelas existirem.
 | `indicadores_clima_talhao` | diária | |
 | `carga_linhas_falha` | por entrega | manual hoje |
 | `mapa_calor_falhas` | por entrega | |
+| `carga_mancha_solos` | quando a mancha mudar | camada de referência |
+| `vincular_talhao_manejo` | quando os talhões ou a mancha mudarem | sempre seguido da declividade |
+| `declividade_talhao` | logo depois do vínculo | baixa os tiles só na primeira vez |
+| `carga_matriz_plantio` | quando a matriz for revisada | |
+| `classificar_epoca_plantio` | diária | acompanha a `DATA_PLANTIO` da base |
 | `criar_view_relatorio` | só quando a definição mudar | |
 | `gerar_relatorio_falhas` | sob demanda | ou após novas cargas |
 
@@ -66,6 +88,11 @@ autenticado no geoportal, porque a conexão usa `GIS("pro")`.
 | `indicadores_clima` | `VERANICO_MM` | 5.0 | validar com agrônomo |
 | `indicadores_clima` | `RAIO_CONFIAVEL_KM` | 15.0 | definido a partir da distribuição |
 | `*` | `UTC_OFFSET_H` | −3 | MS é −4; hoje é único para todas as unidades |
+| `carga_mancha_solos` | `SHAPEFILE` | pasta do OneDrive de um usuário | ajustar em cada máquina |
+| `carga_mancha_solos`, `vincular_talhao_manejo`, `declividade_talhao` | `NOME_CAMADA` / `NOME_CAMADA_SOLOS` | `SOLOS_ATVOS` | tem de ser o mesmo nos três |
+| `carga_matriz_plantio` | `PLANILHA` | `D:\GEO\SOLOS\matriz_plantio.xlsx` | fora do repositório |
+| `declividade_talhao` | `MARGEM_FRONTEIRA` | 0,5 ponto percentual | |
+| `vincular_talhao_manejo` | `PCT_MINIMO_ALERTA` | 60% | repetido como número solto no `classificar_epoca_plantio` |
 
 ## Problemas conhecidos e como resolver
 
@@ -103,6 +130,23 @@ não achar, avisa e o HTML continua disponível para impressão manual.
 em modo online-only. Renomeie sem acento e marque "Sempre manter neste
 dispositivo".
 
+**`nao foi possivel remover a camada` na carga da mancha de solos.** Trava de
+esquema na `SOLOS_ATVOS`. O próprio script lista as causas na ordem em que vale
+verificar: Pro aberto em segundo plano, outra sessão de Python, serviço
+publicado apontando para a camada, sessão presa no SQL Server. Se a trava não
+ceder, troque o nome da camada — nos três scripts de solo, não só no vínculo,
+como a mensagem do script sugere.
+
+**`nenhum tile baixado` na declividade.** A rede corporativa pode estar
+bloqueando o bucket da AWS. Baixe os tiles à mão para `D:\GEO\DEM`.
+
+**Mancha de solos gravada com geometria e sem nenhum atributo.** Os campos foram
+renomeados para maiúscula. Não faça isso — ver `SOLOS_ATVOS` no
+[modelo de dados](03-modelo-de-dados.md).
+
+**Declividade vazia na `TALHAO_MANEJO`.** O vínculo com a mancha rodou depois da
+declividade e regravou a tabela. Rode o `declividade_talhao` de novo.
+
 ## Validação após execução
 
 A área piloto (fazenda 320127) é o caso de referência. Valores esperados:
@@ -114,4 +158,8 @@ A área piloto (fazenda 320127) é o caso de referência. Valores esperados:
 | DAP do voo | 127 |
 | Dias entre porte e voo | 14 |
 | Chuva 0–30 DAP | 96,4 mm (unidade: 146,8) |
+| Talhões 4, 5 e 6: unidade de manejo | 7 |
+| Talhão 7: unidade de manejo | 9 |
+| Talhão 4: faixa de declividade | `> 5%` (mediana 6,21%) |
+| Talhões 4 a 7: período e classe da época | `Mar 1Q`, `Favoravel` |
 | Integridade da view | linhas = chavesig distintos |

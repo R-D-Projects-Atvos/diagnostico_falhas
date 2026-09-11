@@ -12,3 +12,6 @@ contexto, decisão e consequências — inclusive as ruins.
 | [0005](0005-percentual-oficial-do-pims.md) | O percentual exibido é sempre o do PIMS |
 | [0006](0006-inventario-como-alvo-do-join.md) | Falhas cruzadas contra o inventário, não a base atual |
 | [0007](0007-escala-fixa-do-mapa-de-calor.md) | Escala fixa, ancorada no semáforo |
+| [0008](0008-declividade-copernicus.md) | Declividade pelo Copernicus GLO-30, pela mediana |
+| [0009](0009-ressalva-so-quando-muda-a-classe.md) | Ressalva de época só quando a faixa vizinha mudaria a classe |
+| [0010](0010-irrigacao-nao-e-fora-da-epoca.md) | "Favorável com irrigação" não conta como fora da época |

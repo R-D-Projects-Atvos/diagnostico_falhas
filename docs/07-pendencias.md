@@ -49,6 +49,85 @@ circulando.
 
 ## Dívidas técnicas
 
+### Chuva antes do plantio: ausência gravada como zero
+
+Quando a estação não registrou nenhum dia da janela de −30 a −1 DAP, o
+`indicadores_clima_talhao` grava `CHUVA_PRE_30 = 0,0` em vez de nulo. Acontece
+em 210 dos 4.604 talhões. A janela depois do plantio já descarta esse caso; a de
+antes, não.
+
+Consequências:
+
+- O relatório afirma que a área não recebeu chuva antes do plantio. Na área
+  piloto, a estação USL_320121 não tem nenhum registro entre 31/01 e 02/03/2026,
+  e o texto compara 0 mm com os 146,3 mm da média da unidade. A nota de dias sem
+  registro aparece, mas o número principal está errado.
+- Os zeros entram na `CHUVA_PRE_30_UNID` e puxam a média da unidade para baixo.
+
+Proposta: gravar nulo quando `DIAS_SEM_DADO_PRE` cobrir a janela inteira,
+excluir esses talhões da média da unidade e, no relatório, trocar a frase por
+"sem registro na estação".
+
+### Bloco de época montado com o primeiro talhão
+
+O gerador monta o bloco "Época de plantio" e a unidade de manejo do cabeçalho
+com o **primeiro talhão** da fazenda (`registros[0]`).
+
+- Se esse talhão não tem classe, o bloco some do relatório, mesmo com outros
+  talhões classificados. Acontece em 7 fazendas: na 310264, os talhões 1 e 2 não
+  têm classe e os 3, 4, 6 e 7 têm.
+- 20 das 33 fazendas classificadas têm talhões em classes diferentes, e o
+  relatório mostra uma só.
+
+Proposta: resumir a época por fazenda no bloco (área em cada classe) e levar a
+classe de cada talhão para a tabela da página 2.
+
+### Ressalva de fronteira aplicada longe da fronteira
+
+O `classificar_epoca_plantio` testa a faixa de declividade vizinha em todo
+talhão, sem consultar a `DECLIV_CONFIANCA`. O
+[ADR 0009](adr/0009-ressalva-so-quando-muda-a-classe.md) pretendia refinar só os
+talhões perto da fronteira.
+
+Das 984 ressalvas com o motivo "declividade próxima da fronteira", **623 (63%)
+são de talhões cuja mediana está longe dela**. Na área piloto, o talhão 9, com
+1,19% de declividade, sai com esse motivo.
+
+Proposta: só testar a faixa vizinha quando `DECLIV_CONFIANCA = 'Ressalva'`. As
+ressalvas de fronteira cairiam de 984 para 361.
+
+### Data de plantio da classificação só do inventário
+
+A classificação lê a `DATA_PLANTIO` da `BASE_SAFRA` vigente. Na view, 199
+talhões têm unidade de manejo, faixa de declividade e data de plantio e mesmo
+assim estão sem classe. A fazenda 310438, que não está no inventário vigente, é
+um desses casos: 19 talhões com unidade de manejo, nenhum classificado.
+
+Decisão pendente: usar a data do PIMS quando o inventário não tiver, ou manter o
+inventário como única fonte — coerente com o
+[ADR 0006](adr/0006-inventario-como-alvo-do-join.md) — e dizer no relatório por
+que a época não aparece.
+
+### Mancha de solos incompleta em USL-UEL
+
+A `SOLOS_ATVOS` cobre 3.109 dos 3.400 talhões vigentes da UEL (91%) e 3.510 dos
+4.649 da USL (75%). A fazenda 328307 fica inteira de fora. Sem mancha não há
+unidade de manejo, e o relatório sai sem o bloco de época.
+
+Vale confirmar com quem mantém a mancha se a lacuna é de levantamento ou de
+recorte do shapefile.
+
+### Constante de 60% repetida
+
+O limite de talhão dividido entre unidades existe como `PCT_MINIMO_ALERTA` no
+`vincular_talhao_manejo` e como número solto no `classificar_epoca_plantio`.
+Mudar um sem o outro desalinha o alerta da ressalva.
+
+### Caminho do shapefile de solos
+
+O `carga_mancha_solos` aponta para a pasta do OneDrive de um usuário. Em outra
+máquina o caminho precisa ser ajustado antes de rodar.
+
 ### Detecção de fazenda completa
 
 O critério de seleção calcula a média sobre os talhões que **já têm** resultado.
@@ -144,7 +223,8 @@ cumpre a função.
 e foi cortada: os fatores disponíveis hoje são poucos, e o encaminhamento
 depende de decisão de comitê que ninguém preenche ainda. Quando existirem
 campos de decisão, responsável e prazo, a página volta — e permite medir
-quantas áreas críticas viraram replantio de fato.
+quantas áreas críticas viraram replantio de fato. A época de plantio, um desses
+fatores, entrou na página 1 na versão 0.2.
 
 **Paralelismo do plantio.** Viável a partir da `LINHAS_RESTITUIDAS`. Cobre
 parte do que o rastro de plantio daria, e é o candidato natural à próxima

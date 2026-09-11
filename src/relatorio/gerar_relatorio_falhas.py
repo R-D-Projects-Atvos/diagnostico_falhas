@@ -64,13 +64,19 @@ SDE = r"D:\GEO\TALHOES\SQLServer-10-gisdb(atvospublicador).sde"
 DATASET = os.path.join(SDE, "ATVOSPUBLICADOR.AGRICOLA_ATVOS")
 FC_INVENTARIO = os.path.join(DATASET, "ATVOSPUBLICADOR.BASE_SAFRA")
 FC_ESTACOES = os.path.join(DATASET, "ATVOSPUBLICADOR.ESTACOES_ZEUS")
+FC_LINHAS = os.path.join(DATASET, "ATVOSPUBLICADOR.LINHAS_FALHA")
 TB_DIARIO = SDE + r"\ATVOSPUBLICADOR.MONITORAMENTO_ESTACAO"
+TB_MATRIZ = "ATVOSPUBLICADOR.MATRIZ_PLANTIO"
 VIEW = "ATVOSPUBLICADOR.VW_RELATORIO_FALHAS"
 
 META_PCT = 4.2
-JANELA_DIAS = 30
+JANELA_DIAS = 30          # dias apos o plantio no grafico
+JANELA_PRE = 30           # dias ANTES do plantio no grafico
 VERANICO_MM = 5.0
 QUEBRAS = [280, 500, 1000]
+
+# usado para desenhar quando nao ha raster de calor para herdar o SR
+EPSG_MAPA = 31982
 CORES = ["#2E7D5B", "#D79A26", "#C0392B", "#7B1E14"]
 AZUL = "#33657F"
 
@@ -81,7 +87,12 @@ CAMPOS = [
     "QTD_FALHAS", "METROS_FALHA", "TAM_MEDIO_M", "METROS_POR_HA", "TEM_LINHAS",
     "DT_VOO", "PILOTO_VOO", "VANT", "DAP_VOO",
     "DT_PORTE", "PILOTO_PORTE", "DIAS_PORTE_ATE_VOO",
+    "UNIDADE_MANEJO", "AGRUP_SOLOS", "TEXTURA_SOLO", "DECLIVIDADE_PCT",
+    "FAIXA_DECLIVIDADE", "PERIODO_PLANTIO", "CLASSE_EPOCA", "EPOCA_CONDICAO",
+    "EPOCA_CONFIANCA", "EPOCA_ALTERNATIVA",
     "ESTACAO", "ESTACAO_DIST_KM", "CLIMA_CONFIABILIDADE", "CLIMA_DIAS_SEM_DADO",
+    "CHUVA_PRE_15", "CHUVA_PRE_30", "CHUVA_PRE_30_UNID",
+    "CLIMA_DIAS_SEM_DADO_PRE", "CHUVA_PRE_VS_UNIDADE_PCT",
     "CHUVA_0_15", "CHUVA_0_15_UNID", "CHUVA_0_30", "CHUVA_0_30_UNID",
     "CHUVA_VS_UNIDADE_PCT", "DIAS_COM_CHUVA", "DIAS_CHUVA_UNID",
     "MAIOR_VERANICO", "VERANICO_UNID", "TMAX_MEDIA",
@@ -128,15 +139,29 @@ def localizar_raster(cod_fazenda):
     return os.path.join(GDB_RASTERS, sorted(candidatos)[-1])
 
 
-def ler_dados(fazenda):
+def ler_dados(fazenda, exigir_linhas=None):
+    """Le os talhoes da fazenda.
+
+    SO_COM_LINHAS restringe o corpo do relatorio aos talhoes que tem linhas
+    de falha carregadas. Como a carga das linhas ainda cobre poucas areas,
+    exigir isso deixaria quase toda fazenda sem relatorio - entao, quando
+    nao houver nenhum talhao com linhas, o filtro cede e o relatorio sai com
+    o percentual do PIMS, sem o detalhamento espacial.
+    """
+    if exigir_linhas is None:
+        exigir_linhas = SO_COM_LINHAS
     con = arcpy.ArcSDESQLExecute(SDE)
     onde = "COD_FAZENDA = '%s'" % fazenda
-    if SO_COM_LINHAS:
+    if exigir_linhas:
         onde += " AND TEM_LINHAS = 1"
     sql = ("SELECT %s FROM %s WHERE %s ORDER BY CAST(TALHAO AS INT)"
            % (", ".join(CAMPOS), VIEW, onde))
     linhas = con.execute(sql)
     if not isinstance(linhas, list):
+        if exigir_linhas:
+            print("  sem linhas de falha carregadas - relatorio sem o "
+                  "detalhamento espacial")
+            return ler_dados(fazenda, exigir_linhas=False)
         raise RuntimeError("nenhum talhao encontrado para a fazenda %s" % fazenda)
     if not isinstance(linhas[0], list):
         linhas = [linhas]
@@ -259,6 +284,67 @@ def desenhar_mapa(registros, destino_png, caminho_raster):
     return distribuicao_classes(arr, raster)
 
 
+def desenhar_linhas(registros, destino_png, sr_destino):
+    """Desenha as linhas de falha da Bem Agro sobre o contorno dos talhoes.
+
+    O mapa de calor mostra ONDE a falha se concentra; este mostra a falha
+    como ela foi levantada, linha a linha. Sao coisas diferentes: o calor
+    generaliza por densidade, este e o dado bruto.
+    """
+    from matplotlib.collections import LineCollection
+
+    chaves = [r["CHAVESIG"] for r in registros]
+    campo = arcpy.AddFieldDelimiters(FC_LINHAS, "CHAVESIG")
+    onde = "%s IN (%s)" % (campo, ",".join("'%s'" % c for c in chaves))
+
+    segmentos = []
+    with arcpy.da.SearchCursor(FC_LINHAS, ["SHAPE@"], onde) as cur:
+        for (geom,) in cur:
+            if geom is None:
+                continue
+            g = geom.projectAs(sr_destino)
+            for parte in g:
+                pontos = [(p.X, p.Y) for p in parte if p]
+                if len(pontos) > 1:
+                    segmentos.append(pontos)
+
+    if not segmentos:
+        print("  sem linhas de falha para desenhar")
+        return False
+    print("  %d linhas de falha" % len(segmentos))
+
+    fig, ax = plt.subplots(figsize=(7.5, 5.5), dpi=160)
+
+    for talhao, partes, centro in poligonos_utm(chaves, sr_destino):
+        for pontos in partes:
+            ax.add_patch(MplPolygon(pontos, closed=True,
+                                    facecolor="#F7F9FA", edgecolor="#8FA9B8",
+                                    linewidth=0.9))
+
+    ax.add_collection(LineCollection(segmentos, colors="#C0392B",
+                                     linewidths=0.35))
+
+    for talhao, partes, centro in poligonos_utm(chaves, sr_destino):
+        ax.annotate("T-%s" % talhao, centro, ha="center", va="center",
+                    fontsize=8, color="#2F3336",
+                    bbox=dict(boxstyle="round,pad=0.22", fc="white",
+                              ec="#D8DEE2", lw=0.6, alpha=0.9))
+
+    ax.autoscale_view()
+    ax.set_aspect("equal")
+    ax.set_xticks([]); ax.set_yticks([])
+    for lado in ax.spines.values():
+        lado.set_edgecolor("#D8DEE2")
+    ax.set_title("Falhas levantadas pelo VANT", fontsize=10,
+                 color="#2F3336", pad=8)
+
+    fig.tight_layout()
+    fig.savefig(destino_png, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print("  %s" % destino_png)
+    return True
+
+
 def distribuicao_classes(arr, raster):
     """Quanto da area esta em cada faixa de densidade.
 
@@ -294,14 +380,20 @@ def pic_id_da_estacao(nome):
 
 
 def grafico_chuva(nome_estacao, plantio, destino_png):
-    """Chuva dia a dia na janela de brotacao, com o limiar de veranico."""
+    """Chuva dia a dia, do periodo ANTES do plantio ate o fim da brotacao.
+
+    A umidade do solo no dia do plantio depende do que choveu antes: solo que
+    vinha seco nao germina bem nem com chuva boa depois. Por isso o grafico
+    cobre as duas janelas, com o dia do plantio marcado no meio.
+    """
     pic = pic_id_da_estacao(nome_estacao)
     if pic is None or plantio is None:
         return False
+    inicio = plantio - datetime.timedelta(days=JANELA_PRE)
     fim = plantio + datetime.timedelta(days=JANELA_DIAS)
     # SQL Server nao aceita a sintaxe date 'aaaa-mm-dd' do PostgreSQL
     onde = ("PIC_ID = %s AND DIA >= '%s' AND DIA <= '%s'"
-            % (pic, plantio.isoformat(), fim.isoformat()))
+            % (pic, inicio.isoformat(), fim.isoformat()))
     dias, chuvas = [], []
     with arcpy.da.SearchCursor(TB_DIARIO, ["DIA", "CHUVA_TOTAL"], onde) as cur:
         for dia, chuva in sorted(cur):
@@ -310,14 +402,26 @@ def grafico_chuva(nome_estacao, plantio, destino_png):
     if not dias:
         return False
 
-    fig, ax = plt.subplots(figsize=(7.5, 2.3), dpi=160)
-    ax.bar(dias, chuvas, color=AZUL, width=0.75)
-    ax.axhline(VERANICO_MM, color="#C0392B", lw=1, ls="--")
+    fig, ax = plt.subplots(figsize=(7.5, 2.6), dpi=160)
+
+    # antes do plantio em tom mais claro: e contexto, nao a janela critica
+    cores = ["#9CB8C7" if d < plantio else AZUL for d in dias]
+    ax.bar(dias, chuvas, color=cores, width=0.75)
+
+    ax.axvline(plantio, color="#C0392B", lw=1.4)
+    topo = max(chuvas) if chuvas else 1
+    ax.annotate("plantio", (plantio, topo), fontsize=7.5, color="#C0392B",
+                ha="center", va="bottom", xytext=(0, 3),
+                textcoords="offset points", fontweight="bold")
+
+    ax.axhline(VERANICO_MM, color="#7A5410", lw=1, ls="--", alpha=0.7)
     ax.annotate("limiar de veranico (%.0f mm)" % VERANICO_MM,
-                (dias[0], VERANICO_MM), fontsize=7, color="#C0392B",
+                (dias[0], VERANICO_MM), fontsize=7, color="#7A5410",
                 va="bottom", xytext=(2, 2), textcoords="offset points")
     ax.set_ylabel("mm", fontsize=8)
     ax.tick_params(labelsize=7)
+    ax.set_title("Chuva diaria: %d dias antes e %d dias depois do plantio"
+                 % (JANELA_PRE, JANELA_DIAS), fontsize=8.5, pad=6)
     for lado in ("top", "right"):
         ax.spines[lado].set_visible(False)
     fig.autofmt_xdate(rotation=45, ha="right")
@@ -397,6 +501,144 @@ def comparativo(rotulo, valor, media, unidade="", invertido=False):
                  fmt(media), unidade)
 
 
+CORES_EPOCA = {
+    "Favoravel": "#2E7D5B",
+    "Favorável": "#2E7D5B",
+    "Aceitavel": "#7A5410",
+    "Aceitável": "#7A5410",
+    "Restritivo": "#C0392B",
+}
+
+
+def bloco_epoca(r0):
+    """A epoca de plantio ganha bloco proprio, com a faixa do ano ao lado.
+
+    Como campo de texto no meio de doze outros, ela passava despercebida -
+    justamente o indicador que aponta causa fora do clima.
+    """
+    classe = (r0.get("CLASSE_EPOCA") or "").strip()
+    if not classe:
+        return ""
+
+    cor = cor_da_epoca(classe)
+    faixa = faixa_do_ano(r0.get("UNIDADE_MANEJO"),
+                         r0.get("FAIXA_DECLIVIDADE"),
+                         r0.get("PERIODO_PLANTIO"))
+
+    return """
+    <div class="eyebrow" style="margin-top:14px">Epoca de plantio &mdash; Matriz de Plantio</div>
+    <div class="epoca-bloco" style="border-left-color:%s">
+      <div class="epoca-esq">
+        <div class="epoca-classe" style="color:%s">%s</div>
+        <div class="epoca-sub">plantio em <b>%s</b><br>UM %s &middot; declividade %s</div>
+      </div>
+      <div class="epoca-dir">%s%s</div>
+    </div>""" % (
+        cor, cor, classe,
+        r0.get("PERIODO_PLANTIO") or "&mdash;",
+        r0.get("UNIDADE_MANEJO") if r0.get("UNIDADE_MANEJO") is not None else "&mdash;",
+        r0.get("FAIXA_DECLIVIDADE") or "&mdash;",
+        faixa, nota_da_epoca(r0))
+
+
+def cor_da_epoca(classe):
+    """Favoravel com irrigacao fica neutro: e plantio de inverno, pratica
+    deliberada, nao desvio. Pintar de vermelho passaria a ideia errada."""
+    return CORES_EPOCA.get((classe or "").strip(), "#2F3336")
+
+
+def nota_da_epoca(r0):
+    """A matriz classifica supondo manejo de cobertura. Sem dizer isso, a
+    classe afirma mais do que a matriz diz."""
+    partes = []
+    periodo = r0.get("PERIODO_PLANTIO")
+    classe = (r0.get("CLASSE_EPOCA") or "").strip()
+    if not classe:
+        return ""
+
+    if r0.get("EPOCA_CONDICAO"):
+        partes.append("A classificacao pressupoe: %s." % r0["EPOCA_CONDICAO"])
+    if classe.startswith("Favoravel com") or classe.startswith("Favorável com"):
+        partes.append("Plantio de inverno: a matriz o considera adequado "
+                      "quando ha irrigacao ou salvamento.")
+    if (r0.get("EPOCA_CONFIANCA") or "") == "Ressalva":
+        motivo = r0.get("EPOCA_MOTIVO_RESSALVA") or "classificacao incerta"
+        alt = r0.get("EPOCA_ALTERNATIVA")
+        texto = motivo
+        if alt:
+            texto += " (seria %s)" % alt
+        partes.append("<b>Ressalva:</b> %s." % texto)
+
+    return '<div class="epoca">%s</div>' % " ".join(partes)
+
+
+MESES_ORDEM = ["Jan 1Q", "Jan 2Q", "Fev 1Q", "Fev 2Q", "Mar 1Q", "Mar 2Q",
+               "Abr 1Q", "Abr 2Q", "Mai 1Q", "Mai 2Q", "Jun", "Jul", "Ago",
+               "Set", "Out", "Nov", "Dez"]
+
+CORES_FAIXA = {
+    "Favoravel": "#2E7D5B", "Favorável": "#2E7D5B",
+    "Aceitavel": "#D79A26", "Aceitável": "#D79A26",
+    "Restritivo": "#C0392B",
+    "Favoravel com irrigacao": "#7FA9C4",
+    "Favorável com irrigação": "#7FA9C4",
+}
+
+
+def faixa_do_ano(unidade, faixa_decliv, periodo_plantio):
+    """Desenha o ano inteiro conforme a matriz, com o plantio marcado.
+
+    Um campo de texto dizendo "Restritivo" passa despercebido no meio de doze
+    outros. A faixa mostra a janela recomendada inteira e onde o plantio caiu
+    dentro dela - a leitura e imediata.
+    """
+    if unidade is None or not faixa_decliv:
+        return ""
+
+    con = arcpy.ArcSDESQLExecute(SDE)
+    sql = ("SELECT PERIODO, CLASSE_EPOCA FROM %s "
+           "WHERE NUM_MANEJO = %d AND FAIXA_DECLIV = '%s'"
+           % (TB_MATRIZ, int(unidade), faixa_decliv))
+    linhas = con.execute(sql)
+    if not isinstance(linhas, list):
+        return ""
+    if not isinstance(linhas[0], list):
+        linhas = [linhas]
+    classes = {(l[0] or "").strip(): (l[1] or "").strip() for l in linhas}
+
+    celulas, rotulos = "", ""
+    for periodo in MESES_ORDEM:
+        classe = classes.get(periodo, "")
+        cor = CORES_FAIXA.get(classe, "#EDF1F3")
+        atual = periodo == (periodo_plantio or "").strip()
+        borda = "border:2px solid #22475A;" if atual else ""
+        celulas += ('<div class="cel" style="background:%s;%s" title="%s: %s">'
+                    '</div>' % (cor, borda, periodo, classe or "sem regra"))
+        marca = "&#9650;" if atual else "&nbsp;"
+        rotulos += '<div class="cel-rot">%s</div>' % marca
+
+    nomes = ""
+    for nome, span in [("Jan", 2), ("Fev", 2), ("Mar", 2), ("Abr", 2),
+                       ("Mai", 2), ("Jun", 1), ("Jul", 1), ("Ago", 1),
+                       ("Set", 1), ("Out", 1), ("Nov", 1), ("Dez", 1)]:
+        nomes += ('<div class="cel-mes" style="grid-column:span %d">%s</div>'
+                  % (span, nome))
+
+    legenda = ""
+    for classe in ["Favoravel", "Aceitavel", "Restritivo",
+                   "Favoravel com irrigacao"]:
+        legenda += ('<span class="leg-item"><i style="background:%s"></i>%s'
+                    '</span>' % (CORES_FAIXA[classe], classe))
+
+    return ("""
+    <div class="ano">
+      <div class="ano-grade">%s</div>
+      <div class="ano-grade">%s</div>
+      <div class="ano-grade ano-meses">%s</div>
+      <div class="ano-leg">%s</div>
+    </div>""" % (celulas, rotulos, nomes, legenda))
+
+
 def linha_do_tempo(r0):
     marcos = [("Plantio", data(r0["DT_PLANTIO"])),
               ("Porte aprovado", data(r0["DT_PORTE"])),
@@ -424,7 +666,7 @@ def bloco_distribuicao(classes):
     return linhas
 
 
-def montar_html(registros, res, nome_png, classes, nome_chuva):
+def montar_html(registros, res, nome_png, classes, nome_chuva, nome_linhas):
     r0 = registros[0]
     cores_status = {"Dentro da meta": "t-ok", "Atencao": "t-at",
                     "Critico": "t-cr", "Sem resultado": "t-na"}
@@ -444,7 +686,10 @@ def montar_html(registros, res, nome_png, classes, nome_chuva):
 
     clima = ""
     if r0["CHUVA_0_30"] is not None:
-        clima = (comparativo("Chuva 0-15 DAP", r0["CHUVA_0_15"],
+        clima = (comparativo("Chuva 30 dias ANTES do plantio",
+                             r0.get("CHUVA_PRE_30"),
+                             r0.get("CHUVA_PRE_30_UNID"), " mm")
+                 + comparativo("Chuva 0-15 DAP", r0["CHUVA_0_15"],
                              r0["CHUVA_0_15_UNID"], " mm")
                  + comparativo("Chuva 0-30 DAP", r0["CHUVA_0_30"],
                                r0["CHUVA_0_30_UNID"], " mm")
@@ -457,10 +702,14 @@ def montar_html(registros, res, nome_png, classes, nome_chuva):
                  'plantio desta area.</div>')
 
     ressalva = ""
+    faltas = []
     if r0["CLIMA_DIAS_SEM_DADO"]:
-        ressalva = ("<p class='nota'>A estacao nao registrou <b>%d dias</b> "
-                    "da janela de 31 dias. Os acumulados podem estar "
-                    "subestimados.</p>" % r0["CLIMA_DIAS_SEM_DADO"])
+        faltas.append("%d dias apos o plantio" % r0["CLIMA_DIAS_SEM_DADO"])
+    if r0.get("CLIMA_DIAS_SEM_DADO_PRE"):
+        faltas.append("%d dias antes" % r0["CLIMA_DIAS_SEM_DADO_PRE"])
+    if faltas:
+        ressalva = ("<p class='nota'>A estacao nao registrou %s. Os acumulados "
+                    "podem estar subestimados.</p>" % " e ".join(faltas))
 
     contexto = {
         "azul": AZUL, "fazenda": r0["FAZENDA"], "unidade": r0["UNIDADE"],
@@ -486,11 +735,24 @@ def montar_html(registros, res, nome_png, classes, nome_chuva):
         "dist": fmt(r0["ESTACAO_DIST_KM"], 1),
         "tmax": fmt(r0["TMAX_MEDIA"]),
         "chuva_pct": fmt(r0["CHUVA_VS_UNIDADE_PCT"], 0),
+        "manejo": ("UM %s" % r0["UNIDADE_MANEJO"]
+                   if r0.get("UNIDADE_MANEJO") is not None else "&mdash;"),
+        "declividade": (("%s%%  (%s)" % (fmt(r0.get("DECLIVIDADE_PCT")),
+                                         r0.get("FAIXA_DECLIVIDADE")))
+                        if r0.get("DECLIVIDADE_PCT") is not None else "&mdash;"),
+        "bloco_epoca": bloco_epoca(r0),
+        "chuva_pre": fmt(r0.get("CHUVA_PRE_30")),
+        "chuva_pre_unid": fmt(r0.get("CHUVA_PRE_30_UNID")),
         "tabela": linhas_tabela, "clima": clima, "ressalva": ressalva,
         "mapa": ('<img class="mapa" src="%s" alt="Mapa de calor">' % nome_png)
                 if nome_png else
-                '<div class="reservado">Mapa de calor indisponivel: as linhas '
-                'de falha desta area ainda nao foram carregadas.</div>',
+                '<div class="reservado" style="height:36mm">Mapa de calor '
+                'indisponivel: as linhas de falha desta area ainda nao foram '
+                'carregadas.</div>',
+        "mapa_linhas": ('<img class="mapa" src="%s" alt="Falhas levantadas">'
+                        % nome_linhas) if nome_linhas else
+                       '<div class="reservado" style="height:36mm">Linhas de '
+                       'falha nao carregadas para esta area.</div>',
         "linha_tempo": linha_do_tempo(r0),
         "bloco_onde": ("""
         <div class="eyebrow" style="margin-top:14px">Onde esta a falha</div>
@@ -546,11 +808,23 @@ tr.destaque td{background:#FDF3F1}
 .mapa{width:100%%;border:1px solid #D8DEE2;border-radius:3px;display:block}
 /* imagem nao pode ser quebrada entre paginas: sem limite de altura o
    navegador empurra a figura inteira para a pagina seguinte */
-img.mapa{max-height:112mm;object-fit:contain;break-inside:avoid;page-break-inside:avoid}
+img.mapa{max-height:56mm;object-fit:contain;break-inside:avoid;page-break-inside:avoid}
 .grid > div{break-inside:avoid;page-break-inside:avoid}
 .corpo{break-inside:avoid}
 .faixa,.comp,.kpi,table{break-inside:avoid;page-break-inside:avoid}
 .chuva img{max-height:52mm}
+.epoca{font-size:9px;color:#6B7378;margin-top:6px;line-height:1.5}
+.epoca-bloco{display:grid;grid-template-columns:46mm 1fr;gap:14px;border:1px solid #D8DEE2;border-left:4px solid #D8DEE2;border-radius:0;padding:9px 12px;align-items:center}
+.epoca-classe{font-size:19px;font-weight:bold;line-height:1.1}
+.epoca-sub{font-size:9.5px;color:#6B7378;margin-top:4px}
+.ano-grade{display:grid;grid-template-columns:repeat(17,1fr);gap:2px}
+.cel{height:15px;border-radius:2px}
+.cel-rot{text-align:center;font-size:8px;color:#22475A;line-height:1}
+.ano-meses{margin-top:2px}
+.cel-mes{text-align:center;font-size:8px;color:#6B7378}
+.ano-leg{margin-top:5px;font-size:8.5px;color:#6B7378}
+.leg-item{margin-right:12px;white-space:nowrap}
+.leg-item i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
 .nota{font-size:10px;color:#7A5410;background:#FFF8E1;border-left:3px solid #D79A26;padding:7px 10px;margin-top:10px}
 .vazio{font-size:11px;color:#6B7378;background:#F7F9FA;padding:12px;border-radius:3px}
 .reservado{border:1px dashed #B9C4CB;border-radius:3px;background:repeating-linear-gradient(45deg,#F4F7F8,#F4F7F8 9px,#EDF1F3 9px,#EDF1F3 18px);display:flex;align-items:center;justify-content:center;text-align:center;color:#7C8991;font-size:10px;height:52mm}
@@ -594,6 +868,8 @@ img.mapa{max-height:112mm;object-fit:contain;break-inside:avoid;page-break-insid
       <div><div class="rot">Aeronave</div><div class="val">%(vant)s</div></div>
       <div><div class="rot">Porte aprovado em</div><div class="val">%(porte)s</div></div>
       <div><div class="rot">Porte ate o voo</div><div class="val">%(dias_porte)s dias</div></div>
+      <div><div class="rot">Unidade de manejo</div><div class="val">%(manejo)s</div></div>
+      <div><div class="rot">Declividade</div><div class="val">%(declividade)s</div></div>
     </div>
       </div>
       <div>
@@ -617,7 +893,9 @@ img.mapa{max-height:112mm;object-fit:contain;break-inside:avoid;page-break-insid
         <div class="sub">%(area_acima)s ha &middot; %(n_criticos)s talhoes criticos</div></div>
     </div>
 
-    <div class="eyebrow" style="margin-top:16px">Linha do tempo da area</div>
+    %(bloco_epoca)s
+
+    <div class="eyebrow" style="margin-top:14px">Linha do tempo da area</div>
     %(linha_tempo)s
   </div>
   <div class="rod"><span>Geotecnologia &middot; Cartografia e Operacao VANT</span><span>Pagina 1 de 3</span></div>
@@ -631,11 +909,17 @@ img.mapa{max-height:112mm;object-fit:contain;break-inside:avoid;page-break-insid
   <div class="corpo">
     <div class="grid g2">
       <div>
+        <div class="eyebrow">Falhas levantadas</div>
+        %(mapa_linhas)s
+        <p style="font-size:9px;color:#6B7378;margin:5px 0 10px">
+          Cada linha vermelha e uma falha medida pelo VANT, como veio da
+          Bem Agro. E o dado bruto do levantamento.</p>
+
         <div class="eyebrow">Mapa de calor</div>
         %(mapa)s
-        <p style="font-size:9px;color:#6B7378;margin-top:6px">
-          Densidade calculada sobre as linhas de falha da Bem Agro, ponderada
-          pelo comprimento compensado. Escala fixa: comparavel entre areas e safras.</p>
+        <p style="font-size:9px;color:#6B7378;margin-top:5px">
+          A mesma falha vista por densidade, em metros por hectare. Escala
+          fixa: comparavel entre areas e safras.</p>
       </div>
       <div>
         <div class="eyebrow">Resultado por talhao</div>
@@ -671,9 +955,13 @@ img.mapa{max-height:112mm;object-fit:contain;break-inside:avoid;page-break-insid
         <div class="chuva">%(grafico_chuva)s</div>
         <div class="eyebrow" style="margin-top:14px">Leitura</div>
         <div class="caixa">
-          <p>A area recebeu <b>%(chuva_pct)s%%</b> da chuva media da unidade na
-          janela de 30 dias apos o plantio, com temperatura maxima media de
-          %(tmax)s &deg;C.</p>
+          <p>Nos 30 dias que antecederam o plantio a area recebeu
+          <b>%(chuva_pre)s mm</b>, contra %(chuva_pre_unid)s mm da media da
+          unidade &mdash; e a condicao de umidade em que o solo estava quando
+          foi plantado.</p>
+          <p style="margin-top:8px">Nos 30 dias seguintes recebeu
+          <b>%(chuva_pct)s%%</b> da chuva media da unidade, com temperatura
+          maxima media de %(tmax)s &deg;C.</p>
           <p style="margin-top:8px">O percentual de falhas ficou em
           <b>%(falha)s%%</b>, contra meta de %(meta)s%%. Compare os dois: chuva
           proxima da media com falha alta aponta para causa operacional,
@@ -735,13 +1023,20 @@ def gerar_uma(fazenda):
         os.makedirs(pasta)
 
     raster = localizar_raster(fazenda)
-    nome_png, classes = None, []
+    nome_png, classes, sr_mapa = None, [], None
     if raster:
         nome_png = "mapa_calor_%s.png" % fazenda
         classes = desenhar_mapa(registros, os.path.join(pasta, nome_png), raster)
+        sr_mapa = arcpy.Describe(raster).spatialReference
     else:
         print("  sem raster de calor para a fazenda %s - relatorio sem mapa"
               % fazenda)
+
+    nome_linhas = "linhas_falha_%s.png" % fazenda
+    if sr_mapa is None:
+        sr_mapa = arcpy.SpatialReference(EPSG_MAPA)
+    if not desenhar_linhas(registros, os.path.join(pasta, nome_linhas), sr_mapa):
+        nome_linhas = None
 
     nome_chuva = "chuva_diaria_%s.png" % fazenda
     r0 = registros[0]
@@ -749,7 +1044,8 @@ def gerar_uma(fazenda):
                          os.path.join(pasta, nome_chuva)):
         nome_chuva = None
 
-    html = montar_html(registros, res, nome_png, classes, nome_chuva)
+    html = montar_html(registros, res, nome_png, classes, nome_chuva,
+                       nome_linhas)
     destino = os.path.join(pasta, "relatorio_falhas_%s.html" % fazenda)
     with open(destino, "w", encoding="utf-8") as f:
         f.write(html)

@@ -106,7 +106,8 @@ Vínculo entre talhão e estação meteorológica. 27.507 linhas — união dos
 
 ### `INDICADORES_CLIMA_TALHAO` (tabela)
 
-Indicadores da janela 0–30 DAP por talhão. 4.604 linhas.
+Indicadores de duas janelas por talhão: **antes** do plantio (−30 a −1 DAP) e
+**depois** (0 a 30 DAP). 4.604 linhas.
 
 | Campo | Observação |
 |---|---|
@@ -117,8 +118,10 @@ Indicadores da janela 0–30 DAP por talhão. 4.604 linhas.
 | `DIAS_COM_CHUVA` | dias com 5 mm ou mais |
 | `MAIOR_VERANICO` | maior sequência de dias abaixo de 5 mm |
 | `TMAX_MEDIA`, `DIAS_TMAX_ALTA` | |
-| `DIAS_SEM_DADO` | dias da janela sem registro na estação |
-| `CHUVA_0_15_UNID`, `CHUVA_0_30_UNID`, `DIAS_CHUVA_UNID`, `VERANICO_UNID` | média da unidade na mesma safra |
+| `DIAS_SEM_DADO` | dias da janela 0–30 DAP sem registro na estação |
+| `CHUVA_PRE_15`, `CHUVA_PRE_30` | mm nos 15 e nos 30 dias antes do plantio; o dia do plantio não entra |
+| `DIAS_SEM_DADO_PRE` | dias da janela anterior sem registro na estação |
+| `CHUVA_PRE_30_UNID`, `CHUVA_0_15_UNID`, `CHUVA_0_30_UNID`, `DIAS_CHUVA_UNID`, `VERANICO_UNID` | média da unidade na mesma safra |
 
 ### `STG_PORTE_AVALIACAO` e `STG_VOO_MISSAO` (tabelas)
 
@@ -138,6 +141,81 @@ Registro de cada correção de `chavesig` gravada de volta no Portal: data,
 survey, objectid, valor anterior, valor novo e resultado. Existe porque a
 sincronização escreve em produção a cada execução.
 
+### `SOLOS_ATVOS` (feature class, polygon)
+
+Mancha de solos da Atvos, publicada a partir do `Mancha_Solos.shp`. 1.260
+polígonos, cerca de 196 mil ha, **só a região de USL-UEL**.
+
+| Campo | Observação |
+|---|---|
+| `Num_Manejo` | unidade de manejo, 1 a 14 — **a chave da Matriz de Plantio** |
+| `Manejo` | agrupamento de solos; o texto bate exatamente com o da matriz |
+| `solo`, `Textura`, `Saturacao`, `Amb_Atvos`, `Amb_Athena` | atributos do shapefile |
+| `DATA_CARGA` | |
+
+Os nomes de campo ficam **como vêm do shapefile**, em caixa mista. Renomear
+para maiúscula apaga o atributo: o geodatabase não diferencia caixa, então o
+campo "novo" é o mesmo campo, e o `DeleteField` seguinte remove o único que
+existe.
+
+Índice em `Num_Manejo`. **Não habilitar archiving.**
+
+### `TALHAO_MANEJO` (tabela)
+
+Unidade de manejo e declividade de cada talhão. 7.050 linhas, uma por chavesig,
+da união de inventário e database.
+
+| Campo | Gravado por | Observação |
+|---|---|---|
+| `CHAVESIG` | vínculo | |
+| `ORIGEM_TALHAO` | vínculo | `INVENTARIO`, `DATABASE` ou `AMBAS` |
+| `NUM_MANEJO`, `MANEJO`, `SOLO`, `TEXTURA`, `AMB_ATVOS` | vínculo | da mancha **predominante em área** |
+| `PCT_AREA` | vínculo | quanto do talhão a mancha predominante cobre |
+| `QTD_MANCHAS` | vínculo | em quantas manchas o talhão cai |
+| `DECLIV_MEDIANA`, `DECLIV_MEDIA`, `DECLIV_DESVIO` | declividade | em %, sobre o Copernicus GLO-30 |
+| `FAIXA_DECLIV` | declividade | no texto exato da matriz: `< 2,5%`, `2,5 a 5%`, `> 5%` |
+| `DECLIV_CONFIANCA` | declividade | `Ressalva` se a mediana está a até 0,5 ponto de uma fronteira |
+| `DECLIV_FONTE` | declividade | `Copernicus GLO-30` |
+| `DATA_CALCULO` | vínculo | |
+
+Dois scripts escrevem na mesma tabela. O `vincular_talhao_manejo` a regrava
+inteira; o `declividade_talhao` completa os campos de declividade. **A ordem
+importa**: rodar o vínculo depois da declividade apaga a declividade.
+
+### `MATRIZ_PLANTIO` (tabela)
+
+A Matriz de Plantio em formato longo: uma linha por unidade de manejo × faixa
+de declividade × período. 714 linhas (14 × 3 × 17).
+
+| Campo | Observação |
+|---|---|
+| `POLO`, `USINA` | `Sul`, `USL-UEL` |
+| `NUM_MANEJO`, `AGRUP_SOLOS` | |
+| `FAIXA_DECLIV` | `< 2,5%`, `2,5 a 5%`, `> 5%` |
+| `MES_NUM`, `MES`, `QUINZENA` | quinzena só de janeiro a maio |
+| `PERIODO` | `Jan 1Q` … `Mai 2Q`, `Jun` … `Dez` — o texto usado no join |
+| `CLASSE_EPOCA` | `Favoravel`, `Aceitavel`, `Restritivo`, `Favoravel com irrigacao` |
+| `MARCADOR`, `CONDICAO` | os asteriscos da célula e a condição de manejo que eles representam |
+| `DATA_CARGA` | |
+
+Índice em `NUM_MANEJO` + `FAIXA_DECLIV`.
+
+### `EPOCA_PLANTIO_TALHAO` (tabela)
+
+Classe da época de plantio de cada talhão. 5.520 linhas.
+
+| Campo | Observação |
+|---|---|
+| `CHAVESIG`, `SAFRA` | |
+| `DT_PLANTIO` | da `BASE_SAFRA` — **não** do PIMS |
+| `PERIODO_PLANTIO` | a data traduzida para o período da matriz |
+| `NUM_MANEJO`, `FAIXA_DECLIV`, `DECLIV_MEDIANA`, `PCT_AREA_MANEJO` | o que foi usado na consulta |
+| `CLASSE_EPOCA`, `CONDICAO` | da matriz |
+| `EPOCA_CONFIANCA` | `Boa` ou `Ressalva` |
+| `CLASSE_ALTERNATIVA` | a classe na faixa de declividade vizinha, quando difere |
+| `MOTIVO_RESSALVA` | declividade na fronteira ou talhão dividido entre unidades |
+| `DATA_CALCULO` | |
+
 ---
 
 ## Tabelas consumidas, mantidas por outros processos
@@ -156,8 +234,11 @@ Campos usados: `Chavesig`, `Safra`, `BLOCO`, `AMBIENTE`, `ESPAC`,
 
 ### `TALHOES_DATABASE` (feature class, polygon)
 
-Base atual de campo — **pós-plantio**. Usada apenas na união de chaves do
-vínculo talhão–estação. Não entra no relatório de falhas.
+Base atual de campo — **pós-plantio**. Usada na união de chaves dos vínculos
+talhão–estação e talhão–unidade de manejo, e nas zonas da declividade.
+
+A geometria dela não entra no relatório de falhas, mas um talhão que só existe
+nela ainda recebe unidade de manejo e declividade na `TALHAO_MANEJO`.
 
 ---
 
@@ -180,9 +261,19 @@ LEFT JOIN ( ... GROUP BY CHAVESIG ) f        -- agregação das linhas de falha
 OUTER APPLY ( SELECT TOP 1 ... ) v           -- voo que originou o resultado
 OUTER APPLY ( SELECT TOP 1 ... ) p           -- porte que autorizou o voo
 
-LEFT JOIN INDICADORES_CLIMA_TALHAO c         -- clima da janela
+LEFT JOIN INDICADORES_CLIMA_TALHAO c         -- clima das janelas pré e pós
        ON c.CHAVESIG = s.Layer
+
+LEFT JOIN TALHAO_MANEJO m                    -- unidade de manejo e declividade
+       ON m.CHAVESIG = s.Layer
+
+LEFT JOIN EPOCA_PLANTIO_TALHAO e             -- classe da época de plantio
+       ON e.CHAVESIG = s.Layer
 ```
+
+`EPOCA_FORA_DA_INDICADA` é o atalho para o semáforo: vale 1 só para
+`Restritivo`. `Favoravel com irrigacao` vale 0 — ver
+[ADR 0010](adr/0010-irrigacao-nao-e-fora-da-epoca.md).
 
 A geometria vem da `BASE_SAFRA`, então a view é publicável como camada — basta
 registrá-la com o geodatabase pelo Catalog.
@@ -198,6 +289,13 @@ registrá-la com o geodatabase pelo Catalog.
 | Com porte vinculado | 200 (4%) |
 | Com indicadores climáticos | 3.724 (81%) |
 | Sem geometria no inventário | 168 |
+| Com unidade de manejo¹ | 593 (13%) |
+| Com classe de época de plantio¹ | 394 (9%) |
+| Com percentual e classe de época¹ | 200 |
+| Plantio fora da época indicada¹ | 95 |
+
+¹ Consulta de 11/09/2026. Só existe onde há mancha de solos, isto é, em
+USL-UEL.
 
 Os 8% de voo vinculado não significam que só 364 áreas foram voadas — é a
 medida do preenchimento do Registro de Missão pelos pilotos.
