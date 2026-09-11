@@ -16,9 +16,22 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
   monitoramento Zeus da planilha de `ENTRADAS\CLIMA` (com conferência antes de
   apagar e cópia da tabela), refaz o vínculo talhão–estação e os indicadores.
   A consulta do Excel foi guardada em `sql/monitoramento_zeus.sql`.
+- `ATUALIZAR_DIAGNOSTICO.bat` substitui o `ATUALIZAR_CLIMA.bat` e passa a
+  atualizar também o percentual oficial e os surveys de VANT, em três grupos
+  independentes.
+- `carga_status_report.py` e `sincronizar_surveys_vant.py` simulam sem
+  `--gravar`, não gravam origem vazia ou com queda acima de 50% e devolvem as
+  linhas anteriores se a gravação falhar (`protecao.py`).
 
 ### Corrigido
 
+- Percentual oficial parado desde 26/08/2026: a carga usava uma cópia da conexão
+  do BigQuery que trava e listava as tabelas do `gold_arcgis`, o que também trava.
+- A sincronização dos surveys apagava o staging antes de conferir se o Portal
+  tinha devolvido algum dado.
+- A sincronização dos surveys lia no máximo 1.000 registros por consulta, sem
+  aviso: a missão tinha 1.676 linhas de talhão e o staging recebia 1.000. Agora
+  lê em lotes e confere o total com o Portal.
 - Chuva antes do plantio: janela sem nenhum registro na estação era gravada como
   0,0 mm, e o relatório afirmava que não tinha chovido. Agora fica nula, fora da
   média da unidade, e o relatório diz que não há registro. A área piloto

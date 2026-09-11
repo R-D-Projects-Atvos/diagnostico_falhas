@@ -4,26 +4,46 @@ Carga da view Operacao_Vant (BigQuery) para ATVOSPUBLICADOR.Status_Report_VANT.
 
 Estrategia: substituicao total. A origem no BQ e a verdade; o SQL Server e
 copia local para o relatorio e o painel nao dependerem do BigQuery em tempo
-de consulta. Sao ~4.600 registros, roda em segundos.
+de consulta. Sao ~4.700 registros, roda em segundos.
 
 O campo Layer JA E o chavesig de 14 digitos - nao ha concatenacao a fazer.
 A origem so tem falhas; os campos de daninhas ficam nulos ate existirem la.
 
-Uso: python C:\\temp\\carga_status_report.py
+Conexao: a mesma do atualizar_base.py, no OneDrive do Joao - so funciona
+nessa conta. A copia em D:\\GEO\\TALHOES trava esperando login. A tabela e
+aberta pelo nome completo: listar as tabelas do gold_arcgis (ListTables)
+tambem trava o arcpy.
+
+Sem --gravar, so simula: le, confere e mostra o que mudaria.
+
+Uso:
+  propy -u src\\carga\\carga_status_report.py            (simula)
+  propy -u src\\carga\\carga_status_report.py --gravar   (grava)
+
+Codigo de saida: 0 = ok | 1 = nada gravado (conferencia ou erro)
 
 Geotecnologia / Cartografia - Atvos
 """
 
 import datetime
+import functools
+import os
+import sys
+
 import arcpy
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from protecao import motivo_para_nao_gravar, regravar  # noqa: E402
+
+print = functools.partial(print, flush=True)
 arcpy.env.overwriteOutput = True
 
 SDE = r"D:\GEO\TALHOES\SQLServer-10-gisdb(atvospublicador).sde"
 DESTINO = SDE + r"\ATVOSPUBLICADOR.Status_Report_VANT"
 
-BQ = r"D:\GEO\TALHOES\BigQuery-dl-bq-prd-gold_arcgis.sde"
-ORIGEM_NOME = "Operacao_Vant"
+BQ = (r"C:\Users\joao.fgromboni\OneDrive - Atvos\Documentos\ArcGIS\Projects"
+      r"\gdb_atvos\BigQuery-dl-bq-prd-gold_arcgis.sde")
+ORIGEM = BQ + r"\dl-bq-prd.gold_arcgis.Operacao_Vant"
 
 # origem no BQ -> destino no SQL Server
 MAPA = {
@@ -55,42 +75,29 @@ PILOTO = ["32012700010004", "32012700010005",
           "32012700010006", "32012700010007"]
 
 
-def localizar_origem():
-    arcpy.env.workspace = BQ
-    tabelas = arcpy.ListTables() or []
-    for t in tabelas:
-        if t.split(".")[-1].lower() == ORIGEM_NOME.lower():
-            return BQ + "\\" + t
-    raise RuntimeError("nao achei %s no BQ. disponiveis: %s"
-                       % (ORIGEM_NOME, tabelas))
-
-
-def carregar():
-    origem = localizar_origem()
-    print("origem: %s" % origem)
-
-    campos_bq = {f.name for f in arcpy.ListFields(origem)}
+def ler_origem():
+    campos_bq = {f.name for f in arcpy.ListFields(ORIGEM)}
     faltando = [c for c in MAPA if c not in campos_bq]
     if faltando:
         raise RuntimeError("campos ausentes na origem: %s" % faltando)
+    with arcpy.da.SearchCursor(ORIGEM, list(MAPA)) as cur:
+        return [list(linha) for linha in cur]
 
-    n_antes = int(arcpy.management.GetCount(DESTINO)[0])
-    print("registros atuais no destino: %d" % n_antes)
 
-    origem_campos = list(MAPA.keys())
-    destino_campos = [MAPA[c] for c in origem_campos] + ["DATA_CARGA"]
-
-    lidos = []
-    with arcpy.da.SearchCursor(origem, origem_campos) as cur:
-        for linha in cur:
-            lidos.append(list(linha))
-    print("lidos do BQ: %d" % len(lidos))
+def carregar(gravar):
+    print("=" * 64)
+    print(" PERCENTUAL OFICIAL (Operacao_Vant) - %s"
+          % ("GRAVACAO" if gravar else "SIMULACAO (use --gravar para gravar)"))
+    print("=" * 64)
+    print("origem: %s" % ORIGEM)
 
     # le tudo ANTES de apagar: falha de conexao nao pode zerar a producao
-    if not lidos:
-        raise RuntimeError("origem vazia - carga abortada para nao zerar o destino")
+    lidos = ler_origem()
+    n_antes = int(arcpy.management.GetCount(DESTINO)[0])
+    print("lidos do BQ: %d | no banco hoje: %d" % (len(lidos), n_antes))
 
-    idx_layer = origem_campos.index("Layer")
+    campos = list(MAPA)
+    idx_layer, idx_data = campos.index("Layer"), campos.index("DATA_AMOSTRA")
     sem_layer = sum(1 for l in lidos if not l[idx_layer])
     fora_padrao = sum(1 for l in lidos
                       if l[idx_layer] and len(str(l[idx_layer])) != 14)
@@ -98,19 +105,28 @@ def carregar():
         print("AVISO: %d registros sem Layer" % sem_layer)
     if fora_padrao:
         print("AVISO: %d registros com Layer fora de 14 digitos" % fora_padrao)
+    datas = [l[idx_data] for l in lidos if l[idx_data]]
+    if datas:
+        print("publicacao no PIMS: %s a %s"
+              % (min(datas).strftime("%d/%m/%Y"), max(datas).strftime("%d/%m/%Y")))
 
-    print("limpando o destino...")
-    arcpy.management.DeleteRows(DESTINO)
+    motivo = motivo_para_nao_gravar(len(lidos), n_antes)
+    if motivo:
+        print("\nNADA FOI GRAVADO: %s" % motivo)
+        return 1
+
+    if not gravar:
+        print("\nSIMULACAO: nada gravado. Com --gravar, a tabela passaria de %d "
+              "para %d linhas." % (n_antes, len(lidos)))
+        return 0
 
     agora = datetime.datetime.now()
-    inseridos = 0
-    with arcpy.da.InsertCursor(DESTINO, destino_campos) as ins:
-        for linha in lidos:
-            ins.insertRow(linha + [agora])
-            inseridos += 1
-
+    destino_campos = [MAPA[c] for c in campos] + ["DATA_CARGA"]
+    print("regravando o destino...")
+    inseridos = regravar(DESTINO, destino_campos, [l + [agora] for l in lidos])
     print("inseridos: %d" % inseridos)
     conferir()
+    return 0
 
 
 def conferir():
@@ -130,9 +146,9 @@ def conferir():
                      amostra.strftime("%d/%m/%Y") if amostra else "-"))
     if achou == 0:
         print("(nada encontrado - o Layer pode nao estar com 14 digitos)")
-    print("\nesperado: ...0006 com 23,8 | ...0004 com 9,4 | "
+    print("\nreferencia (voo de 08/07/2026): ...0006 com 23,8 | ...0004 com 9,4 | "
           "...0005 com 16,1 | ...0007 com 11,3")
 
 
 if __name__ == "__main__":
-    carregar()
+    sys.exit(carregar("--gravar" in sys.argv))

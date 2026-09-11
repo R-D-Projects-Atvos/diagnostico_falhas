@@ -44,8 +44,9 @@ classificar_epoca_plantio ───────────────┤
 O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` existir.
 O `indicadores_clima_talhao` depende do vínculo e do monitoramento.
 
-Monitoramento, vínculo e clima rodam juntos, nessa ordem, pelo
-`ATUALIZAR_CLIMA.bat` — ver [atualização diária do clima](#atualização-diária-do-clima).
+O percentual oficial, os surveys e a sequência monitoramento → vínculo → clima
+rodam todo dia pelo `ATUALIZAR_DIAGNOSTICO.bat` — ver
+[atualização diária dos dados](#atualização-diária-dos-dados).
 O `criar_view_relatorio` depende de todas as tabelas existirem.
 
 A cadeia do solo e da época de plantio, em ordem:
@@ -66,12 +67,12 @@ rodar de novo quando a base ganhar datas de plantio.
 
 | Script | Frequência | Observação |
 |---|---|---|
-| `carga_status_report` | diária | junto com a rotina das 5h |
-| `sincronizar_surveys_vant` | diária | escreve no Portal a cada execução |
+| `carga_status_report` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
+| `sincronizar_surveys_vant` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat`; escreve no Portal a cada execução |
 | `carga_estacoes_zeus` | quando o cadastro das estações mudar | só o cadastro |
-| `carga_monitoramento_zeus` | diária, 6h | pelo `ATUALIZAR_CLIMA.bat` agendado |
-| `vincular_talhao_estacao` | diária, 6h | pelo `ATUALIZAR_CLIMA.bat` |
-| `indicadores_clima_talhao` | diária, 6h | pelo `ATUALIZAR_CLIMA.bat` |
+| `carga_monitoramento_zeus` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` agendado |
+| `vincular_talhao_estacao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
+| `indicadores_clima_talhao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
 | `carga_linhas_falha` | por entrega | manual hoje |
 | `mapa_calor_falhas` | por entrega | |
 | `carga_mancha_solos` | quando a mancha mudar | camada de referência |
@@ -86,18 +87,28 @@ rodar de novo quando a base ganhar datas de plantio.
 Para agendar: a tarefa precisa rodar com o usuário do Windows que tem o Pro
 autenticado no geoportal, porque a conexão usa `GIS("pro")`.
 
-## Atualização diária do clima
+## Atualização diária dos dados
 
-Tarefa `\GEOTECNOLOGIA\atualizar_clima`, todo dia às **6h**, depois da
+Tarefa `\GEOTECNOLOGIA\atualizar_diagnostico`, todo dia às **6h**, depois da
 atualização da base das 5h (que leva de 7 a 28 minutos): o vínculo e o clima
-dependem dela. Roda o `ATUALIZAR_CLIMA.bat` da raiz do clone:
+dependem dela. Roda o `ATUALIZAR_DIAGNOSTICO.bat` da raiz do clone, em três
+grupos independentes — a falha de um não impede os outros:
 
-1. `carga_monitoramento_zeus.py --gravar` → `MONITORAMENTO_ESTACAO`
-2. `vincular_talhao_estacao.py` → `TALHAO_ESTACAO`
-3. `indicadores_clima_talhao.py` → `INDICADORES_CLIMA_TALHAO`
+- **A.** `carga_status_report.py --gravar` → `Status_Report_VANT` (percentual oficial)
+- **B.** `sincronizar_surveys_vant.py --gravar` → `STG_PORTE_AVALIACAO`,
+  `STG_VOO_MISSAO` e correção do chavesig no Portal
+- **C.** `carga_monitoramento_zeus.py --gravar` → `vincular_talhao_estacao.py` →
+  `indicadores_clima_talhao.py`; dentro do C, cada etapa só roda se a anterior
+  terminou bem
 
-Cada etapa só roda se a anterior terminou bem. Log em
-`D:\GEO\LOGS\atualizacao_clima_<data>_<conta>.log`.
+Log em `D:\GEO\LOGS\atualizacao_diagnostico_<data>_<conta>.log`. A tarefa roda na
+conta do João e só com a sessão dele aberta no servidor — desconectada serve.
+
+**Conexão com o BigQuery.** O percentual oficial usa a conexão do ArcGIS que fica
+no OneDrive do João (`Documentos\ArcGIS\Projects\gdb_atvos`), a mesma do
+`atualizar_base.py`. A tabela é aberta pelo nome completo: listar as tabelas do
+`gold_arcgis` trava o arcpy. A cópia da conexão em `D:\GEO\TALHOES` trava
+esperando login.
 
 **De onde vem a chuva, por enquanto.** O servidor ainda não lê o BigQuery.
 Quem tem a conexão no próprio computador abre a planilha de monitoramento no
@@ -112,12 +123,18 @@ menos dias, menos estações, menos linhas ou estação+dia repetido. Antes de
 gravar, copia a tabela para `D:\GEO\FALHAS\clima_backup.gdb`; se a gravação
 falhar no meio, devolve a cópia.
 
-Para rodar à mão:
+**Percentual oficial e surveys.** Também leem tudo antes de apagar e **não
+gravam** se a origem vier vazia ou com menos da metade das linhas que o banco já
+tem (`protecao.py`). Se a gravação falhar no meio, devolvem as linhas
+anteriores. Os surveys só corrigem o Portal com `--gravar`.
+
+Para rodar à mão — sem `--gravar`, todas só simulam:
 
 ```
-propy -u src\carga\carga_monitoramento_zeus.py            (simula)
-propy -u src\carga\carga_monitoramento_zeus.py --gravar   (grava)
-ATUALIZAR_CLIMA.bat                                       (as três etapas)
+propy -u src\carga\carga_status_report.py        [--gravar]
+propy -u src\carga\sincronizar_surveys_vant.py   [--gravar]
+propy -u src\carga\carga_monitoramento_zeus.py   [--gravar]
+ATUALIZAR_DIAGNOSTICO.bat                          (tudo, gravando)
 ```
 
 ## Parâmetros a revisar
@@ -138,6 +155,8 @@ ATUALIZAR_CLIMA.bat                                       (as três etapas)
 | `vincular_talhao_manejo` | `PCT_MINIMO_ALERTA` | 60% | repetido como número solto no `classificar_epoca_plantio` |
 | `carga_monitoramento_zeus` | `PASTA_ENTRADA` | `ENTRADAS\CLIMA` no OneDrive do João | só existe na conta que sincroniza a pasta |
 | `carga_monitoramento_zeus` | `DIAS_SEM_ATUALIZAR_ALERTA` | 3 | a partir daí o log avisa que o Excel não foi atualizado |
+| `protecao` | `QUEDA_MAXIMA_PCT` | 50 | queda de linhas acima disso não é gravada |
+| `carga_status_report` | `BQ` | conexão do ArcGIS no OneDrive do João | só funciona nessa conta |
 
 ## Problemas conhecidos e como resolver
 
@@ -197,8 +216,12 @@ menor que o banco — o motivo vem logo abaixo. A tabela não foi tocada. Quase
 sempre é a consulta do Excel atualizada pela metade ou editada: atualize de novo
 e salve.
 
-**`ALERTA: a planilha termina em ...`** A chuva não chega sozinha enquanto o
-servidor não lê o BigQuery. Atualize a planilha no Excel.
+**`ALERTA: a planilha termina em ...`** A chuva ainda vem da planilha do Excel.
+Atualize a planilha e salve em `ENTRADAS\CLIMA`.
+
+**`NADA FOI GRAVADO: a origem ...`** no percentual oficial ou nos surveys. A
+leitura veio vazia ou muito menor que o banco, e a tabela não foi tocada. Rode a
+carga de novo sem `--gravar` e confira o número de linhas antes de gravar.
 
 ## Validação após execução
 
