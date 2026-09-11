@@ -288,9 +288,15 @@ nela: ele abre a janela de brotação. `CHUVA_PRE_15` e `CHUVA_PRE_30` somam os
 últimos 15 e 30 dias, e `DIAS_SEM_DADO_PRE` conta os dias sem registro. A média
 da unidade vem em `CHUVA_PRE_30_UNID`, como nos demais indicadores.
 
-**Limitação conhecida:** quando a estação não registrou nenhum dia da janela, o
-acumulado é gravado como 0,0 mm, não como ausente — e esse zero entra na média
-da unidade. Ver [pendências](07-pendencias.md).
+**Janela sem nenhum registro fica nula, não zero.** Falta de dado não é falta de
+chuva — a mesma regra do veranico (6.2). Gravar 0,0 mm fazia o relatório afirmar
+que não choveu antes do plantio e puxava a média da unidade para baixo. O talhão
+fica fora da `CHUVA_PRE_30_UNID`, e o relatório diz que a estação não tem
+registro do período.
+
+O mesmo vale para `CHUVA_PRE_15` quando os últimos 15 dias não têm registro.
+Com registro parcial, o acumulado é gravado e a nota de dias sem registro
+aparece no relatório.
 
 ---
 

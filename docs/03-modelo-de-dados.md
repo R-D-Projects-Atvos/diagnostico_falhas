@@ -119,7 +119,7 @@ Indicadores de duas janelas por talhão: **antes** do plantio (−30 a −1 DAP)
 | `MAIOR_VERANICO` | maior sequência de dias abaixo de 5 mm |
 | `TMAX_MEDIA`, `DIAS_TMAX_ALTA` | |
 | `DIAS_SEM_DADO` | dias da janela 0–30 DAP sem registro na estação |
-| `CHUVA_PRE_15`, `CHUVA_PRE_30` | mm nos 15 e nos 30 dias antes do plantio; o dia do plantio não entra |
+| `CHUVA_PRE_15`, `CHUVA_PRE_30` | mm nos 15 e nos 30 dias antes do plantio; o dia do plantio não entra; **nulo** quando a estação não registrou nenhum dia da janela |
 | `DIAS_SEM_DADO_PRE` | dias da janela anterior sem registro na estação |
 | `CHUVA_PRE_30_UNID`, `CHUVA_0_15_UNID`, `CHUVA_0_30_UNID`, `DIAS_CHUVA_UNID`, `VERANICO_UNID` | média da unidade na mesma safra |
 

@@ -158,6 +158,7 @@ A área piloto (fazenda 320127) é o caso de referência. Valores esperados:
 | DAP do voo | 127 |
 | Dias entre porte e voo | 14 |
 | Chuva 0–30 DAP | 96,4 mm (unidade: 146,8) |
+| Chuva 30 dias antes do plantio | sem registro na estação USL_320121 |
 | Talhões 4, 5 e 6: unidade de manejo | 7 |
 | Talhão 7: unidade de manejo | 9 |
 | Talhão 4: faixa de declividade | `> 5%` (mediana 6,21%) |

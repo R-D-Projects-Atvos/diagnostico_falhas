@@ -138,21 +138,29 @@ def ler_talhoes():
 
 def indicadores_pre(serie, plantio):
     """Chuva na janela ANTERIOR ao plantio: de -JANELA_PRE ate a vespera.
-    O dia do plantio nao entra aqui - ele abre a janela pos."""
+    O dia do plantio nao entra aqui - ele abre a janela pos.
+
+    Janela sem nenhum registro devolve None, nao zero: ausencia de registro
+    nao e ausencia de chuva. Gravar 0,0 fazia o relatorio afirmar que nao
+    choveu antes do plantio e puxava a media da unidade para baixo."""
     chuva_pre = chuva_pre_curta = 0.0
-    sem_dado = 0
+    sem_dado = sem_dado_curta = 0
     for i in range(JANELA_PRE, 0, -1):
         dia = plantio - datetime.timedelta(days=i)
         registro = serie.get(dia)
         if registro is None:
             sem_dado += 1
+            if i <= JANELA_PRE_CURTA:
+                sem_dado_curta += 1
             continue
         chuva = registro[0] or 0.0
         chuva_pre += chuva
         if i <= JANELA_PRE_CURTA:
             chuva_pre_curta += chuva
-    return {"chuva_pre15": round(chuva_pre_curta, 1),
-            "chuva_pre30": round(chuva_pre, 1),
+    return {"chuva_pre15": (None if sem_dado_curta >= JANELA_PRE_CURTA
+                            else round(chuva_pre_curta, 1)),
+            "chuva_pre30": (None if sem_dado >= JANELA_PRE
+                            else round(chuva_pre, 1)),
             "sem_dado_pre": sem_dado}
 
 
@@ -236,6 +244,8 @@ def calcular():
     print("  sem vinculo de estacao : %d" % sem_vinculo)
     print("  estacao sem serie      : %d" % sem_serie)
     print("  janela fora do periodo : %d" % fora_periodo)
+    print("  janela pre sem dado    : %d (gravada nula)"
+          % sum(1 for r in resultados if r[8]["chuva_pre30"] is None))
 
     medias = medias_por_unidade(resultados)
     gravar(resultados, medias, agora)
@@ -248,20 +258,24 @@ def medias_por_unidade(resultados):
     for chave, unidade, safra, _, _, _, _, _, ind in resultados:
         k = (unidade, safra)
         acc = somas.setdefault(k, {"n": 0, "c15": 0.0, "c30": 0.0,
-                                   "dc": 0, "ver": 0, "pre30": 0.0})
+                                   "dc": 0, "ver": 0, "pre30": 0.0, "n_pre": 0})
         acc["n"] += 1
         acc["c15"] += ind["chuva15"]
         acc["c30"] += ind["chuva30"]
         acc["dc"] += ind["dias_chuva"]
         acc["ver"] += ind["veranico"]
-        acc["pre30"] += ind["chuva_pre30"]
+        # talhao sem registro antes do plantio fica fora da media: somado como
+        # zero, o vazio rebaixaria a referencia da unidade inteira
+        if ind["chuva_pre30"] is not None:
+            acc["pre30"] += ind["chuva_pre30"]
+            acc["n_pre"] += 1
 
     medias = {}
     for k, a in somas.items():
         n = float(a["n"])
         medias[k] = (round(a["c15"] / n, 1), round(a["c30"] / n, 1),
                      round(a["dc"] / n, 1), round(a["ver"] / n, 1),
-                     round(a["pre30"] / n, 1))
+                     round(a["pre30"] / a["n_pre"], 1) if a["n_pre"] else None)
     print("  grupos unidade+safra   : %d" % len(medias))
     return medias
 
