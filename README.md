@@ -110,9 +110,30 @@ python -u src/processamento/criar_view_relatorio.py
 # 12. relatórios
 python -u src/relatorio/gerar_relatorio_falhas.py           # lote
 python -u src/relatorio/gerar_relatorio_falhas.py 320127    # uma fazenda
+
+# ou, no servidor, sob demanda e com conferência da fazenda antes de gerar
+D:\GEO\REPOS\diagnostico_falhas\GERAR_RELATORIO_FALHAS.bat  # ver docs/08
 ```
 
 Ordem, dependências e agendamento em [`docs/06-operacao.md`](docs/06-operacao.md).
+
+---
+
+## Onde as coisas ficam
+
+| O quê | Onde |
+|---|---|
+| Este repositório — **a produção roda daqui**, na `main` | `D:\GEO\REPOS\diagnostico_falhas` |
+| Relatórios do lote | `D:\GEO\FALHAS\relatorios` |
+| Relatórios sob demanda | `D:\GEO\FALHAS\sob_demanda` |
+| Rasters do mapa de calor | `D:\GEO\FALHAS\rasters.gdb` |
+| Registro do relatório sob demanda | `D:\GEO\LOGS` |
+
+**Não copie os scripts para `D:\GEO\CODIGOS`.** Lá ficaram só avisos apontando
+para cá. Para atualizar a produção, `git pull` neste clone.
+
+A conexão `D:\GEO\TALHOES\SQLServer-10-gisdb(atvospublicador).sde` fica fora do
+repositório: carrega credencial.
 
 ---
 
@@ -128,6 +149,7 @@ Ordem, dependências e agendamento em [`docs/06-operacao.md`](docs/06-operacao.m
 | [05 — Fontes de dados](docs/05-fontes-de-dados.md) | origem, formato, limitações |
 | [06 — Operação](docs/06-operacao.md) | execução, agendamento, problemas conhecidos |
 | [07 — Pendências](docs/07-pendencias.md) | backlog técnico e bloqueios |
+| [08 — Relatório sob demanda](docs/08-relatorio-sob-demanda.md) | gerar o relatório de uma fazenda pelo servidor, com conferência |
 | [ADRs](docs/adr/) | decisões arquiteturais e seus porquês |
 
 ---

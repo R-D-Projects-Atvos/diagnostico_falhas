@@ -5,6 +5,10 @@
 Tudo roda no Python do ArcGIS Pro (`arcgispro-py3`). Nada precisa ser
 instalado além do que já vem com o Pro.
 
+**A produção roda deste clone**, em `D:\GEO\REPOS\diagnostico_falhas`, na `main`.
+Não há cópia dos scripts em `D:\GEO\CODIGOS` — lá ficaram só avisos. Mudança
+entra por commit e `git pull` no clone.
+
 ```
 "C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\python.exe"
 ```
@@ -72,6 +76,7 @@ rodar de novo quando a base ganhar datas de plantio.
 | `carga_matriz_plantio` | quando a matriz for revisada | |
 | `classificar_epoca_plantio` | diária | acompanha a `DATA_PLANTIO` da base |
 | `criar_view_relatorio` | só quando a definição mudar | |
+| `solicitar_relatorio_falhas` | sob demanda | pelo `GERAR_RELATORIO_FALHAS.bat`; ver [08](08-relatorio-sob-demanda.md) |
 | `gerar_relatorio_falhas` | sob demanda | ou após novas cargas |
 
 Para agendar: a tarefa precisa rodar com o usuário do Windows que tem o Pro
