@@ -218,10 +218,14 @@ def gerar(fazenda, sufixo=None):
         recortado = ExtractByMask(densidade, mascara)
 
         tif = os.path.join(PASTA_TIF, "HEAT_%s_%s.tif" % (fazenda, sufixo))
-        recortado.save(tif)
+        # Compactado, porque o mosaico acumula os arquivos. O Raster.save
+        # ignora a compactacao; o CopyRaster respeita. LZW nao altera nenhum
+        # valor e, na 320127, deixou o arquivo com 42% do tamanho.
+        with arcpy.EnvManager(compression="LZW"):
+            arcpy.management.CopyRaster(recortado, tif)
         maximo = arcpy.management.GetRasterProperties(recortado, "MAXIMUM")
-        print("raster: %s (densidade maxima %.0f m/ha)"
-              % (tif, float(maximo.getOutput(0))))
+        print("raster: %s (%.2f MB, densidade maxima %.0f m/ha)"
+              % (tif, os.path.getsize(tif) / 1e6, float(maximo.getOutput(0))))
 
         arcpy.management.Delete(pontos)
         arcpy.management.Delete(mascara)
