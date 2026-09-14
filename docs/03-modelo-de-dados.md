@@ -28,7 +28,8 @@ casar. Foi por isso que a `Status_Report_VANT` precisou ser recriada — ver
 ### `LINHAS_FALHA` (feature class, polyline, 4326)
 
 Uma feição por falha individual levantada pelo VANT. Volume alto: cerca de
-800 falhas por hectare — 58.765 feições para 74 ha na área piloto.
+800 falhas por hectare — na área piloto, 58.765 feições no arquivo, das quais
+58.446 caem em talhão e são gravadas.
 
 | Campo | Tipo | Origem | Observação |
 |---|---|---|---|
@@ -39,8 +40,8 @@ Uma feição por falha individual levantada pelo VANT. Volume alto: cerca de
 | `COMP_M` | double | shapefile | `Length` — comprimento bruto |
 | `COMP_OFI_M` | double | shapefile | `LengthComp` — o oficial |
 | `CLASSE_TAM` | text(12) | derivado | faixas de tamanho da falha |
-| `DATA_VOO` | date | parâmetro | do Registro de Missão |
-| `LOTE` | text(60) | parâmetro | identificador da entrega, base da idempotência |
+| `DATA_VOO` | date | Registro de Missão | missão de falhas mais recente não interrompida (regra 4.1); nula sem missão |
+| `LOTE` | text(60) | automático | `<fazenda>_<AAAAMMDD_HHMMSS>` da carga; informativo — a troca é por talhão ([ADR 0012](adr/0012-linhas-trocadas-por-talhao.md)) |
 | `DATA_CARGA` | date | automático | |
 
 Índices em `CHAVESIG` e `LOTE`.
@@ -49,6 +50,19 @@ Uma feição por falha individual levantada pelo VANT. Volume alto: cerca de
 reproduzível. Sem registrar contra qual inventário o join foi feito,
 reprocessar a mesma área depois da virada da safra daria outro resultado sem
 ninguém perceber.
+
+### `MAPA_CALOR_FALHAS` (mosaic dataset, SIRGAS 2000 / UTM 21S)
+
+Densidade das falhas em metros de falha compensada por hectare, célula de 2 m.
+Um raster por geração, chamado `HEAT_<fazenda>_<AAAAMMDD_HHMMSS>`: cada entrega
+de linhas carregada **acrescenta** um raster da fazenda, e os anteriores ficam.
+O catálogo ganhou os campos `FAZENDA` e `DATA_GERACAO`; o mosaico ordena por
+`DATA_GERACAO`, então o mais recente de cada fazenda aparece por cima, e é ele
+que o relatório usa. Os pixels ficam no `.tif` de
+mesmo nome em `D:\GEO\FALHAS\mapa_calor_falhas`; o SQL Server guarda o índice e
+o contorno. **Não apague nem mova os `.tif` à mão** — o mosaico aponta para
+eles. Rasters anteriores a setembro/2026 ficaram em `D:\GEO\FALHAS\rasters.gdb`,
+e o gerador ainda os usa para fazenda que não foi recarregada.
 
 ### `STATUS_REPORT_VANT` (tabela)
 
@@ -107,11 +121,12 @@ Vínculo entre talhão e estação meteorológica. 27.507 linhas — união dos
 ### `INDICADORES_CLIMA_TALHAO` (tabela)
 
 Indicadores de duas janelas por talhão: **antes** do plantio (−30 a −1 DAP) e
-**depois** (0 a 30 DAP). 4.604 linhas.
+**depois** (0 a 30 DAP). 5.529 linhas.
 
 | Campo | Observação |
 |---|---|
-| `CHAVESIG`, `UNIDADE`, `SAFRA`, `DT_PLANTIO` | |
+| `CHAVESIG`, `UNIDADE`, `SAFRA` | unidade e safra do inventário; do PIMS quando o talhão não está nele |
+| `DT_PLANTIO`, `DT_PLANTIO_FONTE` | data do PIMS, ou do inventário quando o PIMS não tem (`PIMS` / `INVENTARIO`) — [ADR 0011](adr/0011-data-de-plantio-do-pims.md) |
 | `PIC_ID`, `ESTACAO_NOME`, `DISTANCIA_KM` | |
 | `CONFIABILIDADE` | `Boa` até 15 km, `Ressalva` acima |
 | `CHUVA_0_15`, `CHUVA_0_30` | mm acumulados |
@@ -202,12 +217,12 @@ de declividade × período. 714 linhas (14 × 3 × 17).
 
 ### `EPOCA_PLANTIO_TALHAO` (tabela)
 
-Classe da época de plantio de cada talhão. 5.520 linhas.
+Classe da época de plantio de cada talhão. 5.720 linhas.
 
 | Campo | Observação |
 |---|---|
 | `CHAVESIG`, `SAFRA` | |
-| `DT_PLANTIO` | da `BASE_SAFRA` — **não** do PIMS |
+| `DT_PLANTIO`, `DT_PLANTIO_FONTE` | do PIMS, ou da `BASE_SAFRA` quando o PIMS não tem — [ADR 0011](adr/0011-data-de-plantio-do-pims.md) |
 | `PERIODO_PLANTIO` | a data traduzida para o período da matriz |
 | `NUM_MANEJO`, `FAIXA_DECLIV`, `DECLIV_MEDIANA`, `PCT_AREA_MANEJO` | o que foi usado na consulta |
 | `CLASSE_EPOCA`, `CONDICAO` | da matriz |

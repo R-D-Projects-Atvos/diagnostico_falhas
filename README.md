@@ -56,10 +56,10 @@ Detalhes em [`docs/02-arquitetura.md`](docs/02-arquitetura.md).
 | Bloco | Situação |
 |---|---|
 | Percentual oficial (PIMS via BigQuery) | em produção, atualizado todo dia às 6h |
-| Linhas de falha e mapa de calor | funcionando; 1 área carregada (piloto) |
+| Linhas de falha e mapa de calor | carregadas pelo relatório sob demanda, a partir do que quem pede salva em `ENTRADAS\LINHAS` |
 | Voo e porte (Survey123) | em produção, atualizado todo dia às 6h; cobertura baixa por preenchimento |
-| Indicadores climáticos | em produção, 4.604 talhões, janelas antes e depois do plantio; atualizados todo dia às 6h a partir da planilha do Excel |
-| Solo, declividade e época de plantio | em produção só para USL-UEL, 5.520 talhões; problemas conhecidos em [pendências](docs/07-pendencias.md) |
+| Indicadores climáticos | em produção, 5.529 talhões com a data de plantio do PIMS, janelas antes e depois do plantio; atualizados todo dia às 6h a partir da planilha do Excel |
+| Solo, declividade e época de plantio | em produção só para USL-UEL, 5.720 talhões, atualizada todo dia às 6h; problemas conhecidos em [pendências](docs/07-pendencias.md) |
 | Balanço hídrico / CAD | **bloqueado** — ver [pendências](docs/07-pendencias.md) |
 | Ortomosaico no relatório | espaço reservado, sem decisão |
 
@@ -88,7 +88,7 @@ python -u src/processamento/vincular_talhao_estacao.py
 # 5. indicadores climáticos da janela 0-30 DAP
 python -u src/processamento/indicadores_clima_talhao.py
 
-# o 1, o 3, o monitoramento, o 4 e o 5 rodam todo dia às 6h pelo ATUALIZAR_DIAGNOSTICO.bat
+# o 1, o 3, o monitoramento, o 4, o 5 e a época (8) rodam todo dia às 6h pelo ATUALIZAR_DIAGNOSTICO.bat
 
 # 6. mancha de solos e vínculo talhão -> unidade de manejo
 python -u src/carga/carga_mancha_solos.py
@@ -101,11 +101,11 @@ python -u src/processamento/declividade_talhao.py
 python -u src/carga/carga_matriz_plantio.py
 python -u src/processamento/classificar_epoca_plantio.py
 
-# 9. linhas de falha de uma entrega da Bem Agro
-python -u src/carga/carga_linhas_falha.py
+# 9. linhas de falha salvas em ENTRADAS\LINHAS (o relatório sob demanda já faz)
+python -u src/carga/carga_linhas_falha.py --gravar          # sem --gravar, simula
 
-# 10. mapa de calor da entrega
-python -u src/processamento/mapa_calor_falhas.py
+# 10. mapa de calor de uma fazenda (a carga das linhas já refaz)
+python -u src/processamento/mapa_calor_falhas.py 320127
 
 # 11. view consolidada
 python -u src/processamento/criar_view_relatorio.py
@@ -129,9 +129,10 @@ Ordem, dependências e agendamento em [`docs/06-operacao.md`](docs/06-operacao.m
 | Este repositório — **a produção roda daqui**, na `main` | `D:\GEO\REPOS\diagnostico_falhas` |
 | Relatórios do lote | `D:\GEO\FALHAS\relatorios` |
 | Relatórios sob demanda | `D:\GEO\FALHAS\sob_demanda` |
-| Rasters do mapa de calor | `D:\GEO\FALHAS\rasters.gdb` |
+| Mapa de calor | mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`, que acumula um `.tif` por geração em `D:\GEO\FALHAS\mapa_calor_falhas` (os de antes de setembro/2026 em `rasters.gdb`) |
 | Registro do relatório sob demanda | `D:\GEO\LOGS` |
 | Planilha de monitoramento Zeus (atualizada no Excel) | `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\CLIMA` |
+| Linhas da Bem Agro para carregar | `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\LINHAS` (as carregadas vão para `CARREGADAS`) |
 | Log da atualização diária | `D:\GEO\LOGS\atualizacao_diagnostico_<data>_<conta>.log` |
 
 **Não copie os scripts para `D:\GEO\CODIGOS`.** Lá ficaram só avisos apontando

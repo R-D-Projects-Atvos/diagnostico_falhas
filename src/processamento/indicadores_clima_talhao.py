@@ -33,7 +33,12 @@ Geotecnologia / Cartografia - Atvos
 import datetime
 import functools
 import os
+import sys
+
 import arcpy
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import data_plantio  # noqa: E402
 
 print = functools.partial(print, flush=True)
 arcpy.env.overwriteOutput = True
@@ -56,7 +61,7 @@ RAIO_CONFIAVEL_KM = 15.0
 
 CAMPOS = [
     ("CHAVESIG", "TEXT", 14), ("UNIDADE", "TEXT", 10), ("SAFRA", "TEXT", 10),
-    ("DT_PLANTIO", "DATE", None),
+    ("DT_PLANTIO", "DATE", None), ("DT_PLANTIO_FONTE", "TEXT", 12),
     ("PIC_ID", "LONG", None), ("ESTACAO_NOME", "TEXT", 40),
     ("DISTANCIA_KM", "DOUBLE", None), ("CONFIABILIDADE", "TEXT", 12),
     ("CHUVA_PRE_15", "DOUBLE", None), ("CHUVA_PRE_30", "DOUBLE", None),
@@ -124,14 +129,13 @@ def ler_vinculo():
 
 
 def ler_talhoes():
-    """Chavesig, unidade, safra e data de plantio do inventario."""
-    talhoes = []
-    campos = ["Chavesig", "EmpDesc", "Safra", "DATA_PLANTIO"]
-    with arcpy.da.SearchCursor(FC_INVENTARIO, campos) as cur:
-        for chave, unidade, safra, plantio in cur:
-            if not chave or plantio is None:
-                continue
-            talhoes.append((str(chave).strip(), unidade, safra, plantio.date()))
+    """Chavesig, unidade, safra, data de plantio e de onde veio a data.
+
+    A data e a do PIMS; a do inventario so quando o PIMS nao tem o talhao
+    (data_plantio.py)."""
+    talhoes = [(chave, unidade, safra, plantio, fonte)
+               for chave, (plantio, fonte, unidade, safra)
+               in data_plantio.ler(SDE, FC_INVENTARIO).items()]
     print("talhoes com data de plantio: %d" % len(talhoes))
     return talhoes
 
@@ -219,7 +223,7 @@ def calcular():
     agora = datetime.datetime.now()
     resultados, sem_vinculo, sem_serie, fora_periodo = [], 0, 0, 0
 
-    for chave, unidade, safra, plantio in talhoes:
+    for chave, unidade, safra, plantio, fonte in talhoes:
         v = vinculo.get(chave)
         if not v:
             sem_vinculo += 1
@@ -238,7 +242,7 @@ def calcular():
 
         conf = ("Boa" if (dist or 0) <= RAIO_CONFIAVEL_KM else "Ressalva")
         resultados.append([chave, unidade, safra, plantio, pic, nome,
-                           dist, conf, ind])
+                           dist, conf, ind, fonte])
 
     print("\ncalculados: %d" % len(resultados))
     print("  sem vinculo de estacao : %d" % sem_vinculo)
@@ -255,7 +259,7 @@ def calcular():
 def medias_por_unidade(resultados):
     """Media dos indicadores por unidade e safra - a referencia do relatorio."""
     somas = {}
-    for chave, unidade, safra, _, _, _, _, _, ind in resultados:
+    for chave, unidade, safra, _, _, _, _, _, ind, _ in resultados:
         k = (unidade, safra)
         acc = somas.setdefault(k, {"n": 0, "c15": 0.0, "c30": 0.0,
                                    "dc": 0, "ver": 0, "pre30": 0.0, "n_pre": 0})
@@ -284,10 +288,10 @@ def gravar(resultados, medias, agora):
     arcpy.management.DeleteRows(TB_SAIDA)
     nomes = [c[0] for c in CAMPOS]
     with arcpy.da.InsertCursor(TB_SAIDA, nomes) as ins:
-        for chave, unidade, safra, plantio, pic, nome, dist, conf, ind in resultados:
+        for chave, unidade, safra, plantio, pic, nome, dist, conf, ind, fonte in resultados:
             m = medias.get((unidade, safra), (None, None, None, None, None))
             ins.insertRow([
-                chave, unidade, safra, plantio, pic, nome, dist, conf,
+                chave, unidade, safra, plantio, fonte, pic, nome, dist, conf,
                 ind["chuva_pre15"], ind["chuva_pre30"], ind["sem_dado_pre"],
                 ind["chuva15"], ind["chuva30"], ind["dias_chuva"],
                 ind["veranico"], ind["tmax"], ind["quentes"], ind["umid"],

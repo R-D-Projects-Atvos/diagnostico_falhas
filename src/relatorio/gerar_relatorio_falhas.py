@@ -46,7 +46,11 @@ arcpy.env.overwriteOutput = True
 FAZENDA = None
 
 SO_COM_LINHAS = True          # no corpo do relatorio, so talhoes com linhas
-GDB_RASTERS = r"D:\GEO\FALHAS\rasters.gdb"
+GDB_RASTERS = r"D:\GEO\FALHAS\rasters.gdb"        # rasters de calor antigos
+# mapa de calor por fazenda: mosaic dataset no SQL Server, um .tif por
+# fazenda no disco - os mesmos do mapa_calor_falhas.py
+NOME_MOSAICO_CALOR = "ATVOSPUBLICADOR.MAPA_CALOR_FALHAS"
+PASTA_MAPA_CALOR = r"D:\GEO\FALHAS\mapa_calor_falhas"
 
 PASTA_SAIDA = r"D:\GEO\FALHAS\relatorios"
 
@@ -123,15 +127,29 @@ def fazendas_acima_da_meta():
 
 
 def localizar_raster(cod_fazenda):
-    """Acha o raster de calor da fazenda na gdb, pelo padrao HEAT_<fazenda>_*.
-    Se houver mais de um voo, usa o mais recente pelo sufixo de data."""
+    """Acha o raster de calor da fazenda.
+
+    E o item HEAT_<fazenda>_<data> mais recente do mosaic dataset
+    MAPA_CALOR_FALHAS, que acumula um raster a cada entrega carregada; os
+    pixels estao no .tif de mesmo nome na PASTA_MAPA_CALOR. Fazenda que ainda nao foi
+    recarregada assim pode ter so o raster antigo da GDB_RASTERS."""
+    prefixo = "HEAT_%s_" % cod_fazenda
+    mosaico = os.path.join(SDE, NOME_MOSAICO_CALOR)
+    if arcpy.Exists(mosaico):
+        with arcpy.da.SearchCursor(mosaico, ["Name"],
+                                   "Name LIKE '%s%%'" % prefixo) as cur:
+            nomes = sorted(n for (n,) in cur if n)
+        for nome in reversed(nomes):
+            tif = os.path.join(PASTA_MAPA_CALOR, nome + ".tif")
+            if os.path.isfile(tif):
+                return tif
+
     if not arcpy.Exists(GDB_RASTERS):
         return None
     anterior = arcpy.env.workspace
     arcpy.env.workspace = GDB_RASTERS
     try:
-        candidatos = arcpy.ListRasters("HEAT_%s_*" % cod_fazenda) or []
-        candidatos = [c for c in candidatos if not c.startswith("HEAT_CLS")]
+        candidatos = arcpy.ListRasters(prefixo + "*") or []
     finally:
         arcpy.env.workspace = anterior
     if not candidatos:

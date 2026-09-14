@@ -2,7 +2,7 @@
 REM =====================================================================
 REM  ATVOS - Atualizacao diaria dos dados do diagnostico de falhas
 REM
-REM  Tres grupos independentes - a falha de um nao impede os outros:
+REM  Quatro grupos independentes - a falha de um nao impede os outros:
 REM
 REM   A) carga_status_report.py      -> Status_Report_VANT
 REM                                     (percentual oficial, BigQuery)
@@ -13,6 +13,8 @@ REM                                     (planilha de ENTRADAS\CLIMA)
 REM      vincular_talhao_estacao.py  -> TALHAO_ESTACAO
 REM      indicadores_clima_talhao.py -> INDICADORES_CLIMA_TALHAO
 REM      Dentro do C, cada etapa so roda se a anterior terminou bem.
+REM   D) classificar_epoca_plantio.py -> EPOCA_PLANTIO_TALHAO
+REM                                     (a data de plantio vem do PIMS, do A)
 REM
 REM  Agendado no Task Scheduler (\GEOTECNOLOGIA\atualizar_diagnostico), 6h,
 REM  depois da atualizacao da base - o vinculo e o clima dependem dela.
@@ -70,7 +72,7 @@ echo ---------------- [C1] carga_monitoramento_zeus.py  %TIME% ---------------- 
 if errorlevel 1 (
     echo [X] carga_monitoramento_zeus.py FALHOU em %TIME%. Vinculo e clima NAO rodaram. >> "%LOG%"
     set FALHOU=1
-    goto FIM
+    goto EPOCA
 )
 
 echo. >> "%LOG%"
@@ -79,7 +81,7 @@ echo ---------------- [C2] vincular_talhao_estacao.py  %TIME% ---------------- >
 if errorlevel 1 (
     echo [X] vincular_talhao_estacao.py FALHOU em %TIME%. Clima NAO rodou. >> "%LOG%"
     set FALHOU=1
-    goto FIM
+    goto EPOCA
 )
 
 echo. >> "%LOG%"
@@ -87,6 +89,16 @@ echo ---------------- [C3] indicadores_clima_talhao.py  %TIME% ---------------- 
 %PY% -u "%REPO%src\processamento\indicadores_clima_talhao.py" >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [X] indicadores_clima_talhao.py FALHOU em %TIME%. >> "%LOG%"
+    set FALHOU=1
+)
+
+REM --------------------------- D --------------------------------------
+:EPOCA
+echo. >> "%LOG%"
+echo ---------------- [D] classificar_epoca_plantio.py  %TIME% ---------------- >> "%LOG%"
+%PY% -u "%REPO%src\processamento\classificar_epoca_plantio.py" >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo [X] classificar_epoca_plantio.py FALHOU em %TIME%. >> "%LOG%"
     set FALHOU=1
 )
 

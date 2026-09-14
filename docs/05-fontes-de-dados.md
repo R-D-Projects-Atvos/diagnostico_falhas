@@ -15,6 +15,9 @@ Pontos de atenção descobertos:
 - **`DATA_AMOSTRA` é a data de publicação no PIMS**, não a do voo. A data do
   voo está no Registro de Missão.
 - `DPP` é dinâmico, conta até a data da consulta. Inútil para o relatório.
+- **`DT_PLANTIO` é a data de plantio do produto**: o clima e a época usam ela,
+  e a do inventário só quando o PIMS não tem o talhão
+  ([ADR 0011](adr/0011-data-de-plantio-do-pims.md)).
 - A `Area_total` daqui **diverge levemente** da área do inventário. O
   relatório usa a do PIMS, porque é o denominador do percentual oficial.
 - Sendo uma view, a lógica pode mudar na origem sem aviso. Vale saber quem a
@@ -26,7 +29,10 @@ completo (`dl-bq-prd.gold_arcgis.Operacao_Vant`).
 
 ## 2. Bem Agro — linhas de falha
 
-**Origem:** shapefile entregue por área, `FALHAS.shp`, em WGS84 geográfico.
+**Origem:** download da plataforma da Bem Agro, por fazenda — chega como
+`vectors-gaps.zip`, com o `FALHAS.shp` em WGS84 geográfico. Quem pede o
+relatório salva em `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\LINHAS`, do
+jeito que baixou.
 
 Estrutura (confirmada na área piloto, 58.765 feições):
 
@@ -36,14 +42,18 @@ Estrutura (confirmada na área piloto, 58.765 feições):
 | `Length` | comprimento bruto da falha, em metros |
 | `LengthComp` | `Length − 0,30 m` — o usado no cálculo oficial |
 
-Não traz chavesig, data, safra nem unidade. Todo esse contexto é injetado na
-carga a partir de parâmetros e do spatial join.
+Não traz chavesig, data, safra nem unidade. O talhão sai do spatial join e a
+data do voo, do Registro de Missão.
 
 Volume: cerca de 800 falhas por hectare. Extrapolando para a safra inteira,
 dezenas de milhões de feições — a tabela precisa de índice espacial desde o
 início e não é uma camada para carregar inteira num web map.
 
-**Carga:** `src/carga/carga_linhas_falha.py`, idempotente por lote.
+**Carga:** `src/carga/carga_linhas_falha.py`, chamada pelo relatório sob demanda
+antes de conferir a fazenda. Troca as linhas talhão a talhão, refaz o mapa de
+calor e move a entrega para `ENTRADAS\LINHAS\CARREGADAS`. No servidor, a pasta
+só está sincronizada no OneDrive do João; as outras contas leem por permissão
+dada nela.
 
 ## 3. Inventário — `BASE_SAFRA`
 

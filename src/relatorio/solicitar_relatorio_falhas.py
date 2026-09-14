@@ -6,6 +6,9 @@ Feito para quem opera pelo servidor: dois cliques no
 GERAR_RELATORIO_FALHAS.bat, o codigo da fazenda, a conferencia do que foi
 encontrado e o PDF, numa pasta que se abre sozinha no fim.
 
+Antes de conferir, carrega as linhas de falha que quem pede tiver salvo em
+ENTRADAS\\LINHAS (carga_linhas_falha.py), e o mapa de calor sai delas.
+
 O relatorio em si continua sendo feito pelo gerar_relatorio_falhas.py, o
 mesmo do lote. Este script so pergunta, confere e chama o gerador: qualquer
 melhoria no relatorio vale para os dois caminhos.
@@ -29,7 +32,9 @@ import os
 import sys
 
 print = functools.partial(print, flush=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+AQUI = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, AQUI)
+sys.path.insert(0, os.path.join(os.path.dirname(AQUI), "carga"))
 
 # ---------------------------------------------------------------------------
 # CONFIGURACAO
@@ -133,6 +138,8 @@ def mostrar(cod, info):
     else:
         print("  Relatorio : %s, SEM mapa - a fazenda nao tem linhas de falha "
               "carregadas" % plural(info["total"], "talhao", "talhoes"))
+        print("              (para ter o mapa, salve as linhas da Bem Agro em "
+              "ENTRADAS\\LINHAS e peca de novo)")
         media = info["media_fazenda"]
 
     if media is not None:
@@ -174,11 +181,45 @@ def registrar(usuario, cod, situacao, detalhe=""):
         print("  (aviso: registro nao gravado em %s: %s)" % (caminho, erro))
 
 
+def carregar_linhas_salvas(cod, usuario):
+    """Carrega as linhas de falha salvas em ENTRADAS\\LINHAS antes de conferir
+    a fazenda, para o resumo e o relatorio ja contarem com elas.
+
+    Problema aqui nao impede o relatorio: ele sai com as linhas que ja estavam
+    no banco, e a tela diz isso."""
+    print("\nprocurando linhas de falha salvas em ENTRADAS\\LINHAS...")
+    try:
+        resultados = linhas.processar_pendentes(
+            gravar=True, usuario=usuario,
+            confirmar=lambda prep: sim("\n  Carregar estas linhas?"))
+    except Exception as erro:
+        print("\n  ERRO ao carregar as linhas salvas: %s" % erro)
+        print("  O relatorio sai com as linhas que ja estavam no banco.")
+        registrar(usuario, cod, "ERRO_LINHAS", str(erro).replace("\n", " "))
+        return
+    if resultados is None:
+        print("  O relatorio sai com as linhas que ja estavam no banco.")
+        registrar(usuario, cod, "SEM_ACESSO_LINHAS")
+        return
+
+    for r in resultados:
+        registrar(usuario, cod, "LINHAS_" + r["situacao"], "%s | %s | %s" % (
+            r["entrega"], ",".join(r["fazendas"]), r["lote"] or r["motivo"] or ""))
+    if any(r["situacao"] == "NAO_CARREGADA" for r in resultados):
+        print("\n  Alguma entrega nao entrou (motivo acima) e continua na pasta.")
+    fazendas = {f for r in resultados if r["situacao"] == "CARREGADA"
+                for f in r["fazendas"]}
+    if fazendas and cod not in fazendas:
+        print("\n  ATENCAO: as linhas carregadas agora sao da(s) fazenda(s) %s, "
+              "nao da %s." % (", ".join(sorted(fazendas)), cod))
+
+
 def atender(cod, usuario, teste):
     if not (cod.isdigit() and len(cod) == 6):
         print("  codigo invalido: use os 6 digitos da fazenda, ex.: 320127")
         return
 
+    carregar_linhas_salvas(cod, usuario)
     info = resumo_da_fazenda(cod)
     if info["total"] == 0:
         print("  fazenda %s nao encontrada na base do relatorio. "
@@ -228,9 +269,10 @@ def main():
         return 1
 
     print("\ncarregando o ArcGIS (leva uns 30 segundos)...")
-    global arcpy, gerador
+    global arcpy, gerador, linhas
     try:
         import arcpy
+        import carga_linhas_falha as linhas
         import gerar_relatorio_falhas as gerador
     except Exception as erro:
         print("\nNao consegui carregar o ArcGIS: %s" % erro)

@@ -1,25 +1,48 @@
 # -*- coding: utf-8 -*-
 """
-Gera o mapa de calor das falhas a partir de ATVOSPUBLICADOR.LINHAS_FALHA.
+Gera o mapa de calor das falhas de uma fazenda a partir de
+ATVOSPUBLICADOR.LINHAS_FALHA e o acrescenta ao mosaic dataset
+ATVOSPUBLICADOR.MAPA_CALOR_FALHAS.
 
 Fluxo:
-    LINHAS_FALHA (lote) -> ponto medio de cada falha, pesado por COMP_OFI_M
+    LINHAS_FALHA (talhoes da fazenda) -> ponto medio de cada falha, pesado
+      por COMP_OFI_M
       -> projeta para UTM 21S (densidade em graus nao significa nada)
       -> Kernel Density -> m de falha por hectare
       -> recorta pelos talhoes do inventario
-      -> salva o raster continuo e uma versao classificada com quebras fixas
+      -> HEAT_<fazenda>_<AAAAMMDD_HHMMSS>.tif em D:\\GEO\\FALHAS\\mapa_calor_falhas
+      -> entra no mosaic dataset, junto com os anteriores da fazenda
 
-As quebras sao FIXAS de proposito: escala relativa a cada area impediria
-comparar um talhao com outro e entre safras.
+O mosaic dataset e uma camada so. Os pixels ficam nos .tif, no disco do
+servidor, e o SQL Server guarda o indice. O mosaico ACUMULA: cada geracao
+acrescenta um raster e nenhum anterior e retirado nem apagado (decisao do
+usuario em 14/09/2026). Os campos FAZENDA e DATA_GERACAO identificam cada
+raster, e o mosaico ordena por DATA_GERACAO, do mais novo para o mais antigo:
+onde ha mais de um raster da fazenda, aparece o mais recente.
 
-Requer: extensao Spatial Analyst.
+Cada geracao grava um arquivo com nome novo, em vez de regravar o anterior -
+no servidor, uma conta nao consegue sobrescrever arquivo criado por outra.
+
+Usa todas as linhas da fazenda que estao no banco. A carga troca as linhas
+talhao a talhao (ADR 0012), entao o mapa e o da fazenda como ela esta agora.
+
+O raster e continuo, em m/ha. As faixas de cor (quebras fixas, ADR 0007) sao
+aplicadas pelo gerador do relatorio no desenho.
+
+Roda sozinho depois de cada carga de linhas (carga_linhas_falha.py). A mao:
+  propy -u src\\processamento\\mapa_calor_falhas.py 320127
+
+Requer: extensao Spatial Analyst e ArcGIS Pro Standard ou Advanced (mosaic
+dataset em geodatabase corporativo).
 
 Geotecnologia / Cartografia - Atvos
 """
 
+import datetime
 import os
+import sys
+
 import arcpy
-from arcpy.sa import KernelDensity, ExtractByMask, Reclassify, RemapRange
 
 arcpy.env.overwriteOutput = True
 
@@ -32,27 +55,33 @@ DATASET = os.path.join(SDE, "ATVOSPUBLICADOR.AGRICOLA_ATVOS")
 FC_FALHAS = os.path.join(DATASET, "ATVOSPUBLICADOR.LINHAS_FALHA")
 FC_INVENTARIO = os.path.join(DATASET, "ATVOSPUBLICADOR.BASE_SAFRA")
 
-LOTE = "320127_20260708"
-
-GDB_SAIDA = r"D:\GEO\FALHAS\rasters.gdb"     # file gdb para os rasters
+# os mesmos do gerador do relatorio
+NOME_MOSAICO = "MAPA_CALOR_FALHAS"
+MOSAICO = os.path.join(SDE, "ATVOSPUBLICADOR." + NOME_MOSAICO)
+PASTA_TIF = r"D:\GEO\FALHAS\mapa_calor_falhas"
 
 SR_METRICO = arcpy.SpatialReference(31981)   # SIRGAS 2000 / UTM 21S
 
 CELULA_M = 2          # tamanho da celula do raster
 RAIO_M = 40           # raio de busca do kernel
 
-# Quebras fixas da escala, em metros de falha por hectare.
-QUEBRAS = [300, 600, 900]
-
 # ---------------------------------------------------------------------------
 
 
-def preparar_saida():
-    if not arcpy.Exists(GDB_SAIDA):
-        pasta, nome = os.path.split(GDB_SAIDA)
-        if not os.path.isdir(pasta):
-            os.makedirs(pasta)
-        arcpy.management.CreateFileGDB(pasta, nome)
+def campos_do_nome(nome):
+    """HEAT_<fazenda>_<AAAAMMDD[_HHMMSS]> -> (fazenda, data); None se nao for."""
+    partes = str(nome).split("_")
+    if len(partes) not in (3, 4) or partes[0] != "HEAT":
+        return None
+    fazenda = partes[1]
+    if not (fazenda.isdigit() and len(fazenda) == 6):
+        return None
+    try:
+        data = datetime.datetime.strptime("".join(partes[2:]),
+                                          "%Y%m%d%H%M%S" if len(partes) == 4 else "%Y%m%d")
+    except ValueError:
+        return None
+    return fazenda, data
 
 
 def pontos_medios(onde):
@@ -81,20 +110,18 @@ def pontos_medios(onde):
                 n += 1
     print("pontos gerados: %d" % n)
     if n == 0:
-        raise RuntimeError("nenhuma falha encontrada para o lote %s" % LOTE)
+        raise RuntimeError("nenhuma falha carregada para %s" % onde)
     return saida
 
 
 def mascara_talhoes(onde):
-    """Talhoes do inventario que aparecem neste lote, em UTM."""
+    """Talhoes do inventario que tem linhas, em UTM."""
     chaves = set()
     with arcpy.da.SearchCursor(FC_FALHAS, ["CHAVESIG"], onde) as cur:
         for (c,) in cur:
             if c:
                 chaves.add(c)
-    if not chaves:
-        raise RuntimeError("nenhum chavesig no lote - carga incompleta?")
-    print("talhoes no lote: %s" % ", ".join(sorted(chaves)))
+    print("talhoes com linhas: %d" % len(chaves))
 
     lista = ",".join("'%s'" % c for c in sorted(chaves))
     campo = arcpy.AddFieldDelimiters(FC_INVENTARIO, "Chavesig")
@@ -107,56 +134,110 @@ def mascara_talhoes(onde):
     return mascara
 
 
-def gerar():
+def preparar_mosaico():
+    """Cria o mosaico se preciso e garante os campos, a ordem de exibicao e
+    FAZENDA/DATA_GERACAO preenchidos nos rasters que entraram antes deles."""
+    if not arcpy.Exists(MOSAICO):
+        print("criando o mosaic dataset %s..." % MOSAICO)
+        arcpy.management.CreateMosaicDataset(SDE, NOME_MOSAICO, SR_METRICO,
+                                             num_bands=1, pixel_type="32_BIT_FLOAT")
+
+    existentes = {f.name.upper() for f in arcpy.ListFields(MOSAICO)}
+    if "FAZENDA" not in existentes:
+        arcpy.management.AddField(MOSAICO, "FAZENDA", "TEXT", field_length=6)
+    if "DATA_GERACAO" not in existentes:
+        arcpy.management.AddField(MOSAICO, "DATA_GERACAO", "DATE")
+
+    desc = arcpy.Describe(MOSAICO)
+    if (desc.defaultMosaicMethod != "ByAttribute" or desc.orderField != "DATA_GERACAO"
+            or desc.sortAscending):
+        print("ordenando o mosaico por DATA_GERACAO, do mais novo para o mais antigo")
+        arcpy.management.SetMosaicDatasetProperties(
+            MOSAICO, default_mosaic_method="ByAttribute", order_field="DATA_GERACAO",
+            order_base="1900/01/01", sorting_order="DESCENDING")
+
+    with arcpy.da.SearchCursor(MOSAICO, ["Name"],
+                               "FAZENDA IS NULL OR DATA_GERACAO IS NULL") as cur:
+        sem_campos = [n for (n,) in cur]
+    for nome in sem_campos:
+        valores = campos_do_nome(nome)
+        if valores:
+            preencher(nome, *valores)
+
+
+def preencher(nome, fazenda, data):
+    with arcpy.da.UpdateCursor(MOSAICO, ["FAZENDA", "DATA_GERACAO"],
+                               "Name = '%s'" % nome) as cur:
+        for _ in cur:
+            cur.updateRow([fazenda, data])
+
+
+def publicar(fazenda, tif):
+    """Acrescenta o raster ao mosaico. Os anteriores da fazenda ficam."""
+    preparar_mosaico()
+    nome = os.path.splitext(os.path.basename(tif))[0]
+    arcpy.management.AddRastersToMosaicDataset(
+        MOSAICO, "Raster Dataset", tif,
+        update_cellsize_ranges="UPDATE_CELL_SIZES",
+        update_boundary="UPDATE_BOUNDARY",
+        update_overviews="NO_OVERVIEWS",
+        duplicate_items_action="EXCLUDE_DUPLICATES",
+        calculate_statistics="CALCULATE_STATISTICS")
+    preencher(nome, *campos_do_nome(nome))
+
+    with arcpy.da.SearchCursor(MOSAICO, ["Name"], "FAZENDA = '%s'" % fazenda) as cur:
+        nomes = sorted(n for (n,) in cur)
+    print("rasters da fazenda %s no mosaico: %d (o mais recente aparece por cima)"
+          % (fazenda, len(nomes)))
+
+
+def gerar(fazenda, sufixo=None):
+    """Gera o mapa de calor da fazenda, acrescenta ao mosaico e devolve o .tif."""
+    fazenda = str(fazenda).strip()
+    if not (fazenda.isdigit() and len(fazenda) == 6):
+        raise ValueError("fazenda invalida: %r" % fazenda)
     if arcpy.CheckExtension("Spatial") != "Available":
-        raise RuntimeError("Spatial Analyst indisponivel")
+        raise RuntimeError("Spatial Analyst indisponivel nesta conta")
+    from arcpy.sa import ExtractByMask, KernelDensity
+
+    sufixo = sufixo or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs(PASTA_TIF, exist_ok=True)
+    onde = "CHAVESIG LIKE '%s%%'" % fazenda
+
     arcpy.CheckOutExtension("Spatial")
+    try:
+        pontos = pontos_medios(onde)
+        mascara = mascara_talhoes(onde)
 
-    preparar_saida()
-    onde = "LOTE = '%s'" % LOTE
+        arcpy.env.extent = arcpy.Describe(mascara).extent
+        arcpy.env.snapRaster = None
 
-    pontos = pontos_medios(onde)
-    mascara = mascara_talhoes(onde)
+        print("rodando kernel density (celula %d m, raio %d m)..." % (CELULA_M, RAIO_M))
+        densidade = KernelDensity(pontos, "COMP_OFI_M", CELULA_M, RAIO_M,
+                                  "HECTARES", "DENSITIES", "GEODESIC")
+        recortado = ExtractByMask(densidade, mascara)
 
-    arcpy.env.extent = arcpy.Describe(mascara).extent
-    arcpy.env.snapRaster = None
+        tif = os.path.join(PASTA_TIF, "HEAT_%s_%s.tif" % (fazenda, sufixo))
+        recortado.save(tif)
+        maximo = arcpy.management.GetRasterProperties(recortado, "MAXIMUM")
+        print("raster: %s (densidade maxima %.0f m/ha)"
+              % (tif, float(maximo.getOutput(0))))
 
-    print("rodando kernel density (celula %d m, raio %d m)..." % (CELULA_M, RAIO_M))
-    densidade = KernelDensity(pontos, "COMP_OFI_M", CELULA_M, RAIO_M,
-                              "HECTARES", "DENSITIES", "GEODESIC")
+        arcpy.management.Delete(pontos)
+        arcpy.management.Delete(mascara)
+    finally:
+        # o extent fica no ambiente do processo e cortaria o que vier depois,
+        # como o desenho do relatorio
+        arcpy.env.extent = None
+        arcpy.CheckInExtension("Spatial")
 
-    recortado = ExtractByMask(densidade, mascara)
-
-    sufixo = LOTE.replace("-", "_")
-    saida_cont = os.path.join(GDB_SAIDA, "HEAT_%s" % sufixo)
-    recortado.save(saida_cont)
-    print("raster continuo: %s" % saida_cont)
-
-    remap = RemapRange([
-        [0, QUEBRAS[0], 1],
-        [QUEBRAS[0], QUEBRAS[1], 2],
-        [QUEBRAS[1], QUEBRAS[2], 3],
-        [QUEBRAS[2], 100000, 4],
-    ])
-    classificado = Reclassify(recortado, "VALUE", remap, "NODATA")
-    saida_cls = os.path.join(GDB_SAIDA, "HEAT_CLS_%s" % sufixo)
-    classificado.save(saida_cls)
-    print("raster classificado: %s" % saida_cls)
-    print("  classe 1: ate %d m/ha" % QUEBRAS[0])
-    print("  classe 2: %d a %d" % (QUEBRAS[0], QUEBRAS[1]))
-    print("  classe 3: %d a %d" % (QUEBRAS[1], QUEBRAS[2]))
-    print("  classe 4: acima de %d" % QUEBRAS[2])
-
-    minimo = arcpy.management.GetRasterProperties(recortado, "MINIMUM")
-    maximo = arcpy.management.GetRasterProperties(recortado, "MAXIMUM")
-    print("\ndensidade observada: %.0f a %.0f m/ha"
-          % (float(minimo.getOutput(0)), float(maximo.getOutput(0))))
-    print("(se o maximo passar de %d, reveja as quebras)" % QUEBRAS[-1])
-
-    arcpy.management.Delete(pontos)
-    arcpy.management.Delete(mascara)
-    arcpy.CheckInExtension("Spatial")
+    publicar(fazenda, tif)
+    print("mosaico: %s" % MOSAICO)
+    return tif
 
 
 if __name__ == "__main__":
-    gerar()
+    if len(sys.argv) < 2:
+        print("uso: propy -u src\\processamento\\mapa_calor_falhas.py <fazenda>")
+        sys.exit(1)
+    gerar(sys.argv[1])

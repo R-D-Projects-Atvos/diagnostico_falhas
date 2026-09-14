@@ -22,6 +22,26 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
 - `carga_status_report.py` e `sincronizar_surveys_vant.py` simulam sem
   `--gravar`, não gravam origem vazia ou com queda acima de 50% e devolvem as
   linhas anteriores se a gravação falhar (`protecao.py`).
+- Linhas de falha pelo relatório sob demanda: quem pede salva o download da Bem
+  Agro em `ENTRADAS\LINHAS`, e o `GERAR_RELATORIO_FALHAS.bat` carrega antes de
+  conferir a fazenda. A carga acha a fazenda pelo cruzamento com o inventário,
+  troca as linhas talhão a talhão (ADR 0012), refaz o mapa de calor e move a
+  entrega para `CARREGADAS`. Saem do script o caminho, a data do voo e o lote.
+- Mapa de calor no SQL Server: mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`,
+  que acumula um raster da fazenda inteira a cada geração (`.tif` em
+  `D:\GEO\FALHAS\mapa_calor_falhas`), com o mais recente de cada fazenda por
+  cima. Cada geração grava arquivo novo, então qualquer conta liberada consegue
+  gerar. O raster classificado (`HEAT_CLS`),
+  que o relatório não usava, deixou de ser gerado.
+- Época de plantio no ciclo diário (grupo D do `ATUALIZAR_DIAGNOSTICO.bat`).
+
+### Alterado
+
+- Clima e época de plantio usam a data de plantio do PIMS; a do inventário só
+  quando o PIMS não tem o talhão (ADR 0011). O clima passa de 4.604 para 5.529
+  talhões e a época de 5.520 para 5.720: plantios de julho em diante e talhões
+  de reforma deixam de ficar sem clima, ou com a janela de um plantio antigo.
+- Linhas de falha sem talhão (borda) não são mais gravadas.
 
 ### Corrigido
 

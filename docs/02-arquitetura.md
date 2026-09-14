@@ -16,8 +16,9 @@ gold_arcgis.Operacao_Vant ──► STATUS_REPORT_VANT       │
 (% oficial do PIMS)                                    │
                                                        │
 Shapefile Bem Agro            carga_linhas_falha       │
-FALHAS.shp (linhas/metro) ──► LINHAS_FALHA             │
+(ENTRADAS\LINHAS)         ──► LINHAS_FALHA             │
                               + spatial join           │
+                              MAPA_CALOR_FALHAS mosaic │
                                                        ├─► VW_RELATORIO_FALHAS
 SDE                                                    │        │
 BASE_SAFRA (inventário) ──────────────────────────────►│        │
@@ -63,9 +64,10 @@ total**: leem a origem inteira, validam, apagam o destino e reinserem. Os
 volumes são pequenos (milhares a dezenas de milhares de linhas) e isso elimina
 a classe inteira de problemas de sincronização parcial.
 
-Exceção: `carga_linhas_falha` é **idempotente por lote** — apaga e recarrega
-apenas a entrega identificada pelo campo `LOTE`, porque a tabela acumula
-entregas de áreas diferentes.
+Exceção: `carga_linhas_falha` troca **talhão a talhão** — grava as linhas dos
+talhões que a entrega traz e só então apaga as anteriores desses talhões,
+porque a tabela acumula entregas de áreas diferentes. Ver
+[ADR 0012](adr/0012-linhas-trocadas-por-talhao.md).
 
 Toda carga lê a origem **antes** de apagar o destino e aborta se a origem vier
 vazia. Sem isso, uma falha de conexão zeraria a tabela de produção.

@@ -42,10 +42,12 @@ classificar_epoca_plantio ───────────────┤
 ```
 
 O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` existir.
-O `indicadores_clima_talhao` depende do vínculo e do monitoramento.
+O `indicadores_clima_talhao` depende do vínculo e do monitoramento. Ele e o
+`classificar_epoca_plantio` usam a data de plantio do PIMS, então vêm depois
+do `carga_status_report`.
 
-O percentual oficial, os surveys e a sequência monitoramento → vínculo → clima
-rodam todo dia pelo `ATUALIZAR_DIAGNOSTICO.bat` — ver
+O percentual oficial, os surveys, a sequência monitoramento → vínculo → clima e
+a época de plantio rodam todo dia pelo `ATUALIZAR_DIAGNOSTICO.bat` — ver
 [atualização diária dos dados](#atualização-diária-dos-dados).
 O `criar_view_relatorio` depende de todas as tabelas existirem.
 
@@ -60,8 +62,9 @@ A cadeia do solo e da época de plantio, em ordem:
 **A ordem entre 2 e 3 importa.** O vínculo regrava a `TALHAO_MANEJO` e apaga a
 declividade que estava lá. Depois dele, rode sempre a declividade.
 
-O `classificar_epoca_plantio` usa a `DATA_PLANTIO` da `BASE_SAFRA`, então precisa
-rodar de novo quando a base ganhar datas de plantio.
+O `classificar_epoca_plantio` usa a data de plantio do PIMS — a da `BASE_SAFRA`
+só quando o PIMS não tem o talhão — e roda todo dia, depois do percentual
+oficial.
 
 ## Frequência sugerida
 
@@ -73,13 +76,13 @@ rodar de novo quando a base ganhar datas de plantio.
 | `carga_monitoramento_zeus` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` agendado |
 | `vincular_talhao_estacao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
 | `indicadores_clima_talhao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
-| `carga_linhas_falha` | por entrega | manual hoje |
-| `mapa_calor_falhas` | por entrega | |
+| `carga_linhas_falha` | por entrega | pelo relatório sob demanda, a partir de `ENTRADAS\LINHAS`; ou à mão |
+| `mapa_calor_falhas` | por entrega | refeito pela carga das linhas |
 | `carga_mancha_solos` | quando a mancha mudar | camada de referência |
 | `vincular_talhao_manejo` | quando os talhões ou a mancha mudarem | sempre seguido da declividade |
 | `declividade_talhao` | logo depois do vínculo | baixa os tiles só na primeira vez |
 | `carga_matriz_plantio` | quando a matriz for revisada | |
-| `classificar_epoca_plantio` | diária | acompanha a `DATA_PLANTIO` da base |
+| `classificar_epoca_plantio` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat`; acompanha a data do PIMS |
 | `criar_view_relatorio` | só quando a definição mudar | |
 | `solicitar_relatorio_falhas` | sob demanda | pelo `GERAR_RELATORIO_FALHAS.bat`; ver [08](08-relatorio-sob-demanda.md) |
 | `gerar_relatorio_falhas` | sob demanda | ou após novas cargas |
@@ -91,7 +94,7 @@ autenticado no geoportal, porque a conexão usa `GIS("pro")`.
 
 Tarefa `\GEOTECNOLOGIA\atualizar_diagnostico`, todo dia às **6h**, depois da
 atualização da base das 5h (que leva de 7 a 28 minutos): o vínculo e o clima
-dependem dela. Roda o `ATUALIZAR_DIAGNOSTICO.bat` da raiz do clone, em três
+dependem dela. Roda o `ATUALIZAR_DIAGNOSTICO.bat` da raiz do clone, em quatro
 grupos independentes — a falha de um não impede os outros:
 
 - **A.** `carga_status_report.py --gravar` → `Status_Report_VANT` (percentual oficial)
@@ -100,6 +103,8 @@ grupos independentes — a falha de um não impede os outros:
 - **C.** `carga_monitoramento_zeus.py --gravar` → `vincular_talhao_estacao.py` →
   `indicadores_clima_talhao.py`; dentro do C, cada etapa só roda se a anterior
   terminou bem
+- **D.** `classificar_epoca_plantio.py` → `EPOCA_PLANTIO_TALHAO`; usa a data de
+  plantio do PIMS, então vem depois do A
 
 Log em `D:\GEO\LOGS\atualizacao_diagnostico_<data>_<conta>.log`. A tarefa roda na
 conta do João e só com a sessão dele aberta no servidor — desconectada serve.
@@ -137,13 +142,48 @@ propy -u src\carga\carga_monitoramento_zeus.py   [--gravar]
 ATUALIZAR_DIAGNOSTICO.bat                          (tudo, gravando)
 ```
 
+## Linhas de falha e mapa de calor
+
+Quem pede o relatório baixa as linhas da fazenda na Bem Agro e salva em
+`Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\LINHAS`. O `GERAR_RELATORIO_FALHAS.bat`
+carrega o que estiver lá antes de conferir a fazenda, pedindo confirmação. A
+carga cruza com a `BASE_SAFRA`, troca as linhas dos talhões que vieram, refaz o
+mapa de calor da fazenda no mosaic dataset `MAPA_CALOR_FALHAS` e move a entrega
+para `ENTRADAS\LINHAS\CARREGADAS\<lote>_<conta>`.
+
+O mosaic dataset guarda o índice no SQL Server; os pixels ficam num `.tif` por
+fazenda em `D:\GEO\FALHAS\mapa_calor_falhas`. **Não apague nem mova esses
+arquivos à mão**: o mosaico aponta para eles. Cada geração cria um arquivo novo
+e um item novo no mosaico, e **os anteriores ficam** — decisão de 14/09/2026. O
+mosaico mostra por cima o mais recente de cada fazenda, pela `DATA_GERACAO`, e
+o relatório usa o mais recente. A pasta cresce cerca de 2 MB a cada geração de
+uma fazenda do tamanho da 320127.
+Alimentar mosaic dataset no SQL Server exige ArcGIS Pro Standard ou Advanced na
+conta que roda.
+
+Para rodar à mão:
+
+```
+propy -u src\carga\carga_linhas_falha.py                  (simula)
+propy -u src\carga\carga_linhas_falha.py --gravar         (grava)
+propy -u src\carga\carga_linhas_falha.py --pasta D:\x     (outra pasta de entrada)
+propy -u src\processamento\mapa_calor_falhas.py 320127    (só o mapa de calor)
+```
+
+**Acesso à pasta.** No servidor, a pasta só está sincronizada no OneDrive do
+João, e fica sempre no disco. As contas liberadas para o relatório têm
+permissão de modificar nela; conta nova precisa da mesma permissão, senão a
+ferramenta avisa e o relatório sai com as linhas que já estavam no banco.
+
 ## Parâmetros a revisar
 
 | Onde | Parâmetro | Valor atual | Pendente |
 |---|---|---|---|
-| `carga_linhas_falha` | `ESPACAMENTO_M` | 1.5 | de-para dos códigos `ESPAC` |
-| `mapa_calor_falhas` | `QUEBRAS` | 300/600/900 | atualizar para 280/500/1000 |
-| `gerar_relatorio` | `QUEBRAS` | 280/500/1000 | já correto |
+| `carga_linhas_falha` | `ESPACAMENTO_M` | 1.5 | de-para dos códigos `ESPAC`; só na conferência |
+| `carga_linhas_falha` | `PASTAS_ENTRADA` | `ENTRADAS\LINHAS` no OneDrive de quem roda, senão no do João | |
+| `carga_linhas_falha` | `FAZENDA_MINIMA_PCT` / `SEM_TALHAO_MAXIMO_PCT` | 1 / 50 | fazenda de borda / área fora do inventário |
+| `mapa_calor_falhas` / `gerar_relatorio` | `MOSAICO`, `PASTA_TIF` / `NOME_MOSAICO_CALOR`, `PASTA_MAPA_CALOR` | `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`, `D:\GEO\FALHAS\mapa_calor_falhas` | têm de ser os mesmos |
+| `gerar_relatorio` | `QUEBRAS` | 280/500/1000 | as faixas do mapa de calor ficam só aqui |
 | `gerar_relatorio` | `META_PCT` | 4.2 | confirmado com o agrícola |
 | `indicadores_clima` | `VERANICO_MM` | 5.0 | validar com agrônomo |
 | `indicadores_clima` | `RAIO_CONFIAVEL_KM` | 15.0 | definido a partir da distribuição |
@@ -223,6 +263,22 @@ Atualize a planilha e salve em `ENTRADAS\CLIMA`.
 leitura veio vazia ou muito menor que o banco, e a tabela não foi tocada. Rode a
 carga de novo sem `--gravar` e confira o número de linhas antes de gravar.
 
+**`NADA CARREGADO: nao consegui abrir a entrega`** nas linhas. O arquivo ainda
+está sincronizando ou veio corrompido. Espere o OneDrive terminar e peça de
+novo; se repetir, baixe de novo.
+
+**`NADA CARREGADO: ... fora dos talhoes da BASE_SAFRA`.** A fazenda não está no
+inventário vigente, ou foi baixada a área errada. A entrega fica na pasta; tire
+de lá depois de conferir.
+
+**`nao consegui abrir a pasta de linhas com a conta ...`.** A conta não tem
+permissão na pasta do OneDrive do João. Ver
+[linhas de falha](#linhas-de-falha-e-mapa-de-calor).
+
+**`o mapa de calor da fazenda ... nao foi gerado`.** As linhas entraram, mas o
+Spatial Analyst não estava disponível ou deu erro. O relatório sai sem o mapa
+de calor até rodar `mapa_calor_falhas.py <fazenda>`.
+
 ## Validação após execução
 
 A área piloto (fazenda 320127) é o caso de referência. Valores esperados:
@@ -233,7 +289,7 @@ A área piloto (fazenda 320127) é o caso de referência. Valores esperados:
 | Talhão 6, m/ha | ~1.581 |
 | DAP do voo | 127 |
 | Dias entre porte e voo | 14 |
-| Chuva 0–30 DAP | 96,4 mm (unidade: 146,8) |
+| Chuva 0–30 DAP | 96,4 mm (unidade: 144,7) |
 | Chuva 30 dias antes do plantio | sem registro na estação USL_320121 |
 | Talhões 4, 5 e 6: unidade de manejo | 7 |
 | Talhão 7: unidade de manejo | 9 |

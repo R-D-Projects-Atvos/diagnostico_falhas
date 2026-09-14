@@ -252,8 +252,8 @@ def conferir_piloto(con):
     else:
         for linha in resultado:
             print(" | ".join("-" if v is None else str(v) for v in linha))
-    print("\nesperado: talhao 6 com 23,8% | chuva 96,4 contra 146,8 da unidade "
-          "(66%) | veranico 8 contra 10,2")
+    print("\nesperado: talhao 6 com 23,8% | chuva 96,4 contra 144,7 da unidade "
+          "(67%) | veranico 8 contra 10,2")
 
 
 def checar_duplicidade(con):
