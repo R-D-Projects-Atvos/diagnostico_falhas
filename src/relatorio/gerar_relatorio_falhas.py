@@ -129,9 +129,9 @@ def fazendas_acima_da_meta():
 def localizar_raster(cod_fazenda):
     """Acha o raster de calor da fazenda.
 
-    O vigente e o item HEAT_<fazenda>_<data> do mosaic dataset
-    MAPA_CALOR_FALHAS, que a carga das linhas refaz a cada entrega; os pixels
-    estao no .tif de mesmo nome na PASTA_MAPA_CALOR. Fazenda que ainda nao foi
+    E o item HEAT_<fazenda>_<data> mais recente do mosaic dataset
+    MAPA_CALOR_FALHAS, que acumula um raster a cada entrega carregada; os
+    pixels estao no .tif de mesmo nome na PASTA_MAPA_CALOR. Fazenda que ainda nao foi
     recarregada assim pode ter so o raster antigo da GDB_RASTERS."""
     prefixo = "HEAT_%s_" % cod_fazenda
     mosaico = os.path.join(SDE, NOME_MOSAICO_CALOR)

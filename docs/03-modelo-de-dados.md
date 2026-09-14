@@ -54,8 +54,11 @@ ninguém perceber.
 ### `MAPA_CALOR_FALHAS` (mosaic dataset, SIRGAS 2000 / UTM 21S)
 
 Densidade das falhas em metros de falha compensada por hectare, célula de 2 m.
-Um raster por fazenda, chamado `HEAT_<fazenda>_<AAAAMMDD_HHMMSS>`; cada entrega
-de linhas carregada troca o raster da fazenda. Os pixels ficam no `.tif` de
+Um raster por geração, chamado `HEAT_<fazenda>_<AAAAMMDD_HHMMSS>`: cada entrega
+de linhas carregada **acrescenta** um raster da fazenda, e os anteriores ficam.
+O catálogo ganhou os campos `FAZENDA` e `DATA_GERACAO`; o mosaico ordena por
+`DATA_GERACAO`, então o mais recente de cada fazenda aparece por cima, e é ele
+que o relatório usa. Os pixels ficam no `.tif` de
 mesmo nome em `D:\GEO\FALHAS\mapa_calor_falhas`; o SQL Server guarda o índice e
 o contorno. **Não apague nem mova os `.tif` à mão** — o mosaico aponta para
 eles. Rasters anteriores a setembro/2026 ficaram em `D:\GEO\FALHAS\rasters.gdb`,

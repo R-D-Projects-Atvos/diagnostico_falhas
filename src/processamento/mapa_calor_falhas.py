@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Gera o mapa de calor das falhas de uma fazenda a partir de
-ATVOSPUBLICADOR.LINHAS_FALHA e o poe no mosaic dataset
+ATVOSPUBLICADOR.LINHAS_FALHA e o acrescenta ao mosaic dataset
 ATVOSPUBLICADOR.MAPA_CALOR_FALHAS.
 
 Fluxo:
@@ -11,12 +11,17 @@ Fluxo:
       -> Kernel Density -> m de falha por hectare
       -> recorta pelos talhoes do inventario
       -> HEAT_<fazenda>_<AAAAMMDD_HHMMSS>.tif em D:\\GEO\\FALHAS\\mapa_calor_falhas
-      -> entra no mosaic dataset; os rasters anteriores da fazenda saem
+      -> entra no mosaic dataset, junto com os anteriores da fazenda
 
-O mosaic dataset e uma camada so, com um raster por fazenda: os pixels ficam
-no .tif, no disco do servidor, e o SQL Server guarda o indice. Cada geracao
-ganha um arquivo com nome novo, em vez de regravar o anterior - no servidor,
-uma conta nao consegue sobrescrever arquivo criado por outra.
+O mosaic dataset e uma camada so. Os pixels ficam nos .tif, no disco do
+servidor, e o SQL Server guarda o indice. O mosaico ACUMULA: cada geracao
+acrescenta um raster e nenhum anterior e retirado nem apagado (decisao do
+usuario em 14/09/2026). Os campos FAZENDA e DATA_GERACAO identificam cada
+raster, e o mosaico ordena por DATA_GERACAO, do mais novo para o mais antigo:
+onde ha mais de um raster da fazenda, aparece o mais recente.
+
+Cada geracao grava um arquivo com nome novo, em vez de regravar o anterior -
+no servidor, uma conta nao consegue sobrescrever arquivo criado por outra.
 
 Usa todas as linhas da fazenda que estao no banco. A carga troca as linhas
 talhao a talhao (ADR 0012), entao o mapa e o da fazenda como ela esta agora.
@@ -61,6 +66,22 @@ CELULA_M = 2          # tamanho da celula do raster
 RAIO_M = 40           # raio de busca do kernel
 
 # ---------------------------------------------------------------------------
+
+
+def campos_do_nome(nome):
+    """HEAT_<fazenda>_<AAAAMMDD[_HHMMSS]> -> (fazenda, data); None se nao for."""
+    partes = str(nome).split("_")
+    if len(partes) not in (3, 4) or partes[0] != "HEAT":
+        return None
+    fazenda = partes[1]
+    if not (fazenda.isdigit() and len(fazenda) == 6):
+        return None
+    try:
+        data = datetime.datetime.strptime("".join(partes[2:]),
+                                          "%Y%m%d%H%M%S" if len(partes) == 4 else "%Y%m%d")
+    except ValueError:
+        return None
+    return fazenda, data
 
 
 def pontos_medios(onde):
@@ -113,18 +134,47 @@ def mascara_talhoes(onde):
     return mascara
 
 
-def criar_mosaico():
-    if arcpy.Exists(MOSAICO):
-        return
-    print("criando o mosaic dataset %s..." % MOSAICO)
-    arcpy.management.CreateMosaicDataset(SDE, NOME_MOSAICO, SR_METRICO,
-                                         num_bands=1, pixel_type="32_BIT_FLOAT")
+def preparar_mosaico():
+    """Cria o mosaico se preciso e garante os campos, a ordem de exibicao e
+    FAZENDA/DATA_GERACAO preenchidos nos rasters que entraram antes deles."""
+    if not arcpy.Exists(MOSAICO):
+        print("criando o mosaic dataset %s..." % MOSAICO)
+        arcpy.management.CreateMosaicDataset(SDE, NOME_MOSAICO, SR_METRICO,
+                                             num_bands=1, pixel_type="32_BIT_FLOAT")
+
+    existentes = {f.name.upper() for f in arcpy.ListFields(MOSAICO)}
+    if "FAZENDA" not in existentes:
+        arcpy.management.AddField(MOSAICO, "FAZENDA", "TEXT", field_length=6)
+    if "DATA_GERACAO" not in existentes:
+        arcpy.management.AddField(MOSAICO, "DATA_GERACAO", "DATE")
+
+    desc = arcpy.Describe(MOSAICO)
+    if (desc.defaultMosaicMethod != "ByAttribute" or desc.orderField != "DATA_GERACAO"
+            or desc.sortAscending):
+        print("ordenando o mosaico por DATA_GERACAO, do mais novo para o mais antigo")
+        arcpy.management.SetMosaicDatasetProperties(
+            MOSAICO, default_mosaic_method="ByAttribute", order_field="DATA_GERACAO",
+            order_base="1900/01/01", sorting_order="DESCENDING")
+
+    with arcpy.da.SearchCursor(MOSAICO, ["Name"],
+                               "FAZENDA IS NULL OR DATA_GERACAO IS NULL") as cur:
+        sem_campos = [n for (n,) in cur]
+    for nome in sem_campos:
+        valores = campos_do_nome(nome)
+        if valores:
+            preencher(nome, *valores)
+
+
+def preencher(nome, fazenda, data):
+    with arcpy.da.UpdateCursor(MOSAICO, ["FAZENDA", "DATA_GERACAO"],
+                               "Name = '%s'" % nome) as cur:
+        for _ in cur:
+            cur.updateRow([fazenda, data])
 
 
 def publicar(fazenda, tif):
-    """Poe o raster novo no mosaico e so depois tira os anteriores da fazenda:
-    o mosaico nunca fica sem o mapa dela."""
-    criar_mosaico()
+    """Acrescenta o raster ao mosaico. Os anteriores da fazenda ficam."""
+    preparar_mosaico()
     nome = os.path.splitext(os.path.basename(tif))[0]
     arcpy.management.AddRastersToMosaicDataset(
         MOSAICO, "Raster Dataset", tif,
@@ -133,27 +183,16 @@ def publicar(fazenda, tif):
         update_overviews="NO_OVERVIEWS",
         duplicate_items_action="EXCLUDE_DUPLICATES",
         calculate_statistics="CALCULATE_STATISTICS")
+    preencher(nome, *campos_do_nome(nome))
 
-    onde = "Name LIKE 'HEAT_%s_%%' AND Name <> '%s'" % (fazenda, nome)
-    with arcpy.da.SearchCursor(MOSAICO, ["Name"], onde) as cur:
-        anteriores = sorted(n for (n,) in cur)
-    if anteriores:
-        arcpy.management.RemoveRastersFromMosaicDataset(
-            MOSAICO, where_clause=onde, update_boundary="UPDATE_BOUNDARY")
-        print("saiu do mosaico: %s" % ", ".join(anteriores))
-
-    # arquivo anterior: apaga se esta conta puder; se for de outra conta, fica
-    for arquivo in sorted(os.listdir(PASTA_TIF)):
-        base, ext = os.path.splitext(arquivo)
-        if ext.lower() == ".tif" and base.startswith("HEAT_%s_" % fazenda) and base != nome:
-            try:
-                arcpy.management.Delete(os.path.join(PASTA_TIF, arquivo))
-            except Exception:
-                print("  (arquivo anterior ficou no disco, de outra conta: %s)" % arquivo)
+    with arcpy.da.SearchCursor(MOSAICO, ["Name"], "FAZENDA = '%s'" % fazenda) as cur:
+        nomes = sorted(n for (n,) in cur)
+    print("rasters da fazenda %s no mosaico: %d (o mais recente aparece por cima)"
+          % (fazenda, len(nomes)))
 
 
 def gerar(fazenda, sufixo=None):
-    """Gera o mapa de calor da fazenda, publica no mosaico e devolve o .tif."""
+    """Gera o mapa de calor da fazenda, acrescenta ao mosaico e devolve o .tif."""
     fazenda = str(fazenda).strip()
     if not (fazenda.isdigit() and len(fazenda) == 6):
         raise ValueError("fazenda invalida: %r" % fazenda)

@@ -153,8 +153,11 @@ para `ENTRADAS\LINHAS\CARREGADAS\<lote>_<conta>`.
 
 O mosaic dataset guarda o índice no SQL Server; os pixels ficam num `.tif` por
 fazenda em `D:\GEO\FALHAS\mapa_calor_falhas`. **Não apague nem mova esses
-arquivos à mão**: o mosaico aponta para eles. Cada geração cria um arquivo novo,
-tira o anterior do mosaico e apaga o arquivo anterior quando a conta pode.
+arquivos à mão**: o mosaico aponta para eles. Cada geração cria um arquivo novo
+e um item novo no mosaico, e **os anteriores ficam** — decisão de 14/09/2026. O
+mosaico mostra por cima o mais recente de cada fazenda, pela `DATA_GERACAO`, e
+o relatório usa o mais recente. A pasta cresce cerca de 2 MB a cada geração de
+uma fazenda do tamanho da 320127.
 Alimentar mosaic dataset no SQL Server exige ArcGIS Pro Standard ou Advanced na
 conta que roda.
 

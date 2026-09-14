@@ -136,7 +136,8 @@ compensada por hectare** — a mesma métrica da tabela.
 Parâmetros: célula de 2 m, raio de 40 m, unidade de área em hectares.
 
 O mapa é o da **fazenda inteira**, com todas as linhas dela que estão no banco,
-e é refeito a cada entrega carregada, no mosaic dataset `MAPA_CALOR_FALHAS`.
+e é gerado de novo a cada entrega carregada. Os mapas anteriores continuam no
+mosaic dataset `MAPA_CALOR_FALHAS`; o relatório usa o mais recente.
 
 ### 3.2 Escala fixa, ancorada no semáforo
 

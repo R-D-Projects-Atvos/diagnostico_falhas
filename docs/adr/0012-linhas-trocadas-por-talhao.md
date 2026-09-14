@@ -33,7 +33,9 @@ seja o lote anterior. Os outros talhões da fazenda ficam como estavam.
   `DATA_VOO` sai do Registro de Missão pela regra 4.1.
 - O mapa de calor passa a ser o da fazenda inteira, com as linhas que estão no
   banco, e vai para o mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`, no SQL
-  Server, com um `.tif` por fazenda em `D:\GEO\FALHAS\mapa_calor_falhas`. Cada
+  Server, com um `.tif` por geração em `D:\GEO\FALHAS\mapa_calor_falhas`. Os
+  mapas anteriores ficam no mosaico — o que se troca são as linhas, não o
+  histórico do mapa — e o mais recente de cada fazenda aparece por cima. Cada
   geração grava arquivo com nome novo, porque uma conta não sobrescreve arquivo
   criado por outra; na `rasters.gdb` antiga, as outras contas nem gravavam.
 
@@ -41,8 +43,9 @@ seja o lote anterior. Os outros talhões da fazenda ficam como estavam.
 
 - Recarregar a mesma entrega não duplica, e o voo novo de um talhão troca o
   antigo sem intervenção.
-- O banco guarda só a entrega mais recente de cada talhão. O arquivo carregado
-  fica em `ENTRADAS\LINHAS\CARREGADAS`.
+- A `LINHAS_FALHA` guarda só a entrega mais recente de cada talhão. O arquivo
+  carregado fica em `ENTRADAS\LINHAS\CARREGADAS`, e o mapa de calor de cada
+  geração continua no mosaico.
 - Uma entrega que traga só parte de um talhão troca o talhão inteiro pelas
   linhas parciais. A tela de conferência mostra, por talhão, as linhas novas e
   as que estão no banco antes de gravar.
