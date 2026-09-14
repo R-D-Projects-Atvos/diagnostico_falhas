@@ -32,9 +32,10 @@ seja o lote anterior. Os outros talhões da fazenda ficam como estavam.
 - `LOTE` passa a ser `<fazenda>_<AAAAMMDD_HHMMSS da carga>`, só informativo.
   `DATA_VOO` sai do Registro de Missão pela regra 4.1.
 - O mapa de calor passa a ser o da fazenda inteira, com as linhas que estão no
-  banco. Sai como `.tif` em `D:\GEO\FALHAS\rasters_calor`, onde qualquer conta
-  liberada para o relatório consegue gravar — na `rasters.gdb`, os arquivos
-  internos são de quem a criou.
+  banco, e vai para o mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`, no SQL
+  Server, com um `.tif` por fazenda em `D:\GEO\FALHAS\mapa_calor_falhas`. Cada
+  geração grava arquivo com nome novo, porque uma conta não sobrescreve arquivo
+  criado por outra; na `rasters.gdb` antiga, as outras contas nem gravavam.
 
 ## Consequências
 

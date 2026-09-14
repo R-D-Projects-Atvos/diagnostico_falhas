@@ -148,8 +148,15 @@ Quem pede o relatório baixa as linhas da fazenda na Bem Agro e salva em
 `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\LINHAS`. O `GERAR_RELATORIO_FALHAS.bat`
 carrega o que estiver lá antes de conferir a fazenda, pedindo confirmação. A
 carga cruza com a `BASE_SAFRA`, troca as linhas dos talhões que vieram, refaz o
-mapa de calor da fazenda em `D:\GEO\FALHAS\rasters_calor` e move a entrega para
-`ENTRADAS\LINHAS\CARREGADAS\<lote>_<conta>`.
+mapa de calor da fazenda no mosaic dataset `MAPA_CALOR_FALHAS` e move a entrega
+para `ENTRADAS\LINHAS\CARREGADAS\<lote>_<conta>`.
+
+O mosaic dataset guarda o índice no SQL Server; os pixels ficam num `.tif` por
+fazenda em `D:\GEO\FALHAS\mapa_calor_falhas`. **Não apague nem mova esses
+arquivos à mão**: o mosaico aponta para eles. Cada geração cria um arquivo novo,
+tira o anterior do mosaico e apaga o arquivo anterior quando a conta pode.
+Alimentar mosaic dataset no SQL Server exige ArcGIS Pro Standard ou Advanced na
+conta que roda.
 
 Para rodar à mão:
 
@@ -172,9 +179,8 @@ ferramenta avisa e o relatório sai com as linhas que já estavam no banco.
 | `carga_linhas_falha` | `ESPACAMENTO_M` | 1.5 | de-para dos códigos `ESPAC`; só na conferência |
 | `carga_linhas_falha` | `PASTAS_ENTRADA` | `ENTRADAS\LINHAS` no OneDrive de quem roda, senão no do João | |
 | `carga_linhas_falha` | `FAZENDA_MINIMA_PCT` / `SEM_TALHAO_MAXIMO_PCT` | 1 / 50 | fazenda de borda / área fora do inventário |
-| `mapa_calor_falhas` / `gerar_relatorio` | `PASTA_SAIDA` / `PASTA_RASTERS` | `D:\GEO\FALHAS\rasters_calor` | têm de ser a mesma |
-| `mapa_calor_falhas` | `QUEBRAS` | 300/600/900 | atualizar para 280/500/1000 |
-| `gerar_relatorio` | `QUEBRAS` | 280/500/1000 | já correto |
+| `mapa_calor_falhas` / `gerar_relatorio` | `MOSAICO`, `PASTA_TIF` / `NOME_MOSAICO_CALOR`, `PASTA_MAPA_CALOR` | `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`, `D:\GEO\FALHAS\mapa_calor_falhas` | têm de ser os mesmos |
+| `gerar_relatorio` | `QUEBRAS` | 280/500/1000 | as faixas do mapa de calor ficam só aqui |
 | `gerar_relatorio` | `META_PCT` | 4.2 | confirmado com o agrícola |
 | `indicadores_clima` | `VERANICO_MM` | 5.0 | validar com agrônomo |
 | `indicadores_clima` | `RAIO_CONFIAVEL_KM` | 15.0 | definido a partir da distribuição |

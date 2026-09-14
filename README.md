@@ -129,7 +129,7 @@ Ordem, dependências e agendamento em [`docs/06-operacao.md`](docs/06-operacao.m
 | Este repositório — **a produção roda daqui**, na `main` | `D:\GEO\REPOS\diagnostico_falhas` |
 | Relatórios do lote | `D:\GEO\FALHAS\relatorios` |
 | Relatórios sob demanda | `D:\GEO\FALHAS\sob_demanda` |
-| Rasters do mapa de calor | `D:\GEO\FALHAS\rasters_calor` (os antigos em `rasters.gdb`) |
+| Mapa de calor | mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`, um `.tif` por fazenda em `D:\GEO\FALHAS\mapa_calor_falhas` (os antigos em `rasters.gdb`) |
 | Registro do relatório sob demanda | `D:\GEO\LOGS` |
 | Planilha de monitoramento Zeus (atualizada no Excel) | `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\CLIMA` |
 | Linhas da Bem Agro para carregar | `Projetos_Cart\DIAGNOSTICO_FALHAS\ENTRADAS\LINHAS` (as carregadas vão para `CARREGADAS`) |

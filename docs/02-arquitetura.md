@@ -18,7 +18,7 @@ gold_arcgis.Operacao_Vant ──► STATUS_REPORT_VANT       │
 Shapefile Bem Agro            carga_linhas_falha       │
 (ENTRADAS\LINHAS)         ──► LINHAS_FALHA             │
                               + spatial join           │
-                              mapa_calor_falhas (.tif) │
+                              MAPA_CALOR_FALHAS mosaic │
                                                        ├─► VW_RELATORIO_FALHAS
 SDE                                                    │        │
 BASE_SAFRA (inventário) ──────────────────────────────►│        │

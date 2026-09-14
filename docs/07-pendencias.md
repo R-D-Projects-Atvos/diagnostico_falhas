@@ -140,11 +140,6 @@ A `CLIMA_CONFIABILIDADE` hoje considera só a distância da estação. Uma janel
 com 23 de 31 dias sem registro produz acumulados que não são comparáveis, mas
 aparece como "Boa" se a estação estiver perto.
 
-### Quebras do mapa de calor desatualizadas
-
-O `mapa_calor_falhas.py` ainda usa 300/600/900. O gerador já aplica
-280/500/1000 no desenho. Alinhar os dois.
-
 ### Pasta das linhas depende do OneDrive do João
 
 A `ENTRADAS\LINHAS` só existe no servidor pela sincronização do OneDrive do

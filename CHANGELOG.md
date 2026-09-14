@@ -27,8 +27,11 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
   conferir a fazenda. A carga acha a fazenda pelo cruzamento com o inventário,
   troca as linhas talhão a talhão (ADR 0012), refaz o mapa de calor e move a
   entrega para `CARREGADAS`. Saem do script o caminho, a data do voo e o lote.
-- Mapa de calor da fazenda inteira, em `.tif` em `D:\GEO\FALHAS\rasters_calor`,
-  onde qualquer conta liberada consegue gravar.
+- Mapa de calor no SQL Server: mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`,
+  com um raster da fazenda inteira por fazenda (`.tif` em
+  `D:\GEO\FALHAS\mapa_calor_falhas`). Cada geração grava arquivo novo, então
+  qualquer conta liberada consegue gerar. O raster classificado (`HEAT_CLS`),
+  que o relatório não usava, deixou de ser gerado.
 - Época de plantio no ciclo diário (grupo D do `ATUALIZAR_DIAGNOSTICO.bat`).
 
 ### Alterado

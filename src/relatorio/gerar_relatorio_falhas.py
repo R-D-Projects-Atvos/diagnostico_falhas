@@ -47,7 +47,10 @@ FAZENDA = None
 
 SO_COM_LINHAS = True          # no corpo do relatorio, so talhoes com linhas
 GDB_RASTERS = r"D:\GEO\FALHAS\rasters.gdb"        # rasters de calor antigos
-PASTA_RASTERS = r"D:\GEO\FALHAS\rasters_calor"    # .tif do mapa_calor_falhas
+# mapa de calor por fazenda: mosaic dataset no SQL Server, um .tif por
+# fazenda no disco - os mesmos do mapa_calor_falhas.py
+NOME_MOSAICO_CALOR = "ATVOSPUBLICADOR.MAPA_CALOR_FALHAS"
+PASTA_MAPA_CALOR = r"D:\GEO\FALHAS\mapa_calor_falhas"
 
 PASTA_SAIDA = r"D:\GEO\FALHAS\relatorios"
 
@@ -124,29 +127,34 @@ def fazendas_acima_da_meta():
 
 
 def localizar_raster(cod_fazenda):
-    """Acha o raster de calor mais recente da fazenda, pelo padrao
-    HEAT_<fazenda>_<data>: os .tif da PASTA_RASTERS, que a carga das linhas
-    refaz a cada entrega, e os antigos da GDB_RASTERS. A data do sufixo decide
-    - AAAAMMDD do voo nos antigos, AAAAMMDD_HHMMSS da carga nos novos."""
+    """Acha o raster de calor da fazenda.
+
+    O vigente e o item HEAT_<fazenda>_<data> do mosaic dataset
+    MAPA_CALOR_FALHAS, que a carga das linhas refaz a cada entrega; os pixels
+    estao no .tif de mesmo nome na PASTA_MAPA_CALOR. Fazenda que ainda nao foi
+    recarregada assim pode ter so o raster antigo da GDB_RASTERS."""
     prefixo = "HEAT_%s_" % cod_fazenda
-    candidatos = []
-    if os.path.isdir(PASTA_RASTERS):
-        for nome in os.listdir(PASTA_RASTERS):
-            if nome.upper().startswith(prefixo) and nome.lower().endswith(".tif"):
-                candidatos.append((nome[len(prefixo):-4],
-                                   os.path.join(PASTA_RASTERS, nome)))
-    if arcpy.Exists(GDB_RASTERS):
-        anterior = arcpy.env.workspace
-        arcpy.env.workspace = GDB_RASTERS
-        try:
-            for nome in arcpy.ListRasters(prefixo + "*") or []:
-                candidatos.append((nome[len(prefixo):],
-                                   os.path.join(GDB_RASTERS, nome)))
-        finally:
-            arcpy.env.workspace = anterior
+    mosaico = os.path.join(SDE, NOME_MOSAICO_CALOR)
+    if arcpy.Exists(mosaico):
+        with arcpy.da.SearchCursor(mosaico, ["Name"],
+                                   "Name LIKE '%s%%'" % prefixo) as cur:
+            nomes = sorted(n for (n,) in cur if n)
+        for nome in reversed(nomes):
+            tif = os.path.join(PASTA_MAPA_CALOR, nome + ".tif")
+            if os.path.isfile(tif):
+                return tif
+
+    if not arcpy.Exists(GDB_RASTERS):
+        return None
+    anterior = arcpy.env.workspace
+    arcpy.env.workspace = GDB_RASTERS
+    try:
+        candidatos = arcpy.ListRasters(prefixo + "*") or []
+    finally:
+        arcpy.env.workspace = anterior
     if not candidatos:
         return None
-    return max(candidatos)[1]
+    return os.path.join(GDB_RASTERS, sorted(candidatos)[-1])
 
 
 def ler_dados(fazenda, exigir_linhas=None):
