@@ -156,8 +156,16 @@ fazenda em `D:\GEO\FALHAS\mapa_calor_falhas`. **Não apague nem mova esses
 arquivos à mão**: o mosaico aponta para eles. Cada geração cria um arquivo novo
 e um item novo no mosaico, e **os anteriores ficam** — decisão de 14/09/2026. O
 mosaico mostra por cima o mais recente de cada fazenda, pela `DATA_GERACAO`, e
-o relatório usa o mais recente. A pasta cresce cerca de 2 MB a cada geração de
-uma fazenda do tamanho da 320127.
+o relatório usa o mais recente.
+
+**Espaço.** A pasta só cresce. Os `.tif` são gravados compactados (LZW, sem
+alterar nenhum valor): a geração da 320127, com 4 talhões e 71 ha, ocupa 0,8 MB.
+Sem compactar, o raster ocupa cerca de 1 MB por km² do retângulo que envolve os
+talhões da fazenda; compactado, menos de 60% disso, e menos ainda quanto mais
+vazio houver entre os talhões. Pelos retângulos das 1.522 fazendas da base, uma
+geração de cada uma somaria cerca de 9 GB — metade das fazendas abaixo de 3 MB,
+a maior (410270) perto de 250 MB. Em 14/09/2026 o D: tinha 176 GB livres.
+
 Alimentar mosaic dataset no SQL Server exige ArcGIS Pro Standard ou Advanced na
 conta que roda.
 

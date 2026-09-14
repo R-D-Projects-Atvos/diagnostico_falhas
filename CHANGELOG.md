@@ -30,9 +30,9 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
 - Mapa de calor no SQL Server: mosaic dataset `ATVOSPUBLICADOR.MAPA_CALOR_FALHAS`,
   que acumula um raster da fazenda inteira a cada geração (`.tif` em
   `D:\GEO\FALHAS\mapa_calor_falhas`), com o mais recente de cada fazenda por
-  cima. Cada geração grava arquivo novo, então qualquer conta liberada consegue
-  gerar. O raster classificado (`HEAT_CLS`),
-  que o relatório não usava, deixou de ser gerado.
+  cima. Cada geração grava arquivo novo e compactado (LZW), então qualquer conta
+  liberada consegue gerar. O raster classificado (`HEAT_CLS`), que o relatório
+  não usava, deixou de ser gerado.
 - Época de plantio no ciclo diário (grupo D do `ATUALIZAR_DIAGNOSTICO.bat`).
 
 ### Alterado
