@@ -166,4 +166,4 @@ Branches: `main` estável, `feat/*` para novidades, `fix/*` para correções.
 Commits em português, no imperativo (`acrescenta gráfico de chuva diária`).
 Toda decisão que alguém possa questionar depois vira um ADR em `docs/adr/`.
 
-Joao
+# João
