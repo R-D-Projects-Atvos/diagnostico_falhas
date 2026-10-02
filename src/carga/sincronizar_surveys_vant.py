@@ -343,6 +343,13 @@ def main():
     print("=" * 64)
     print("conectando pela sessao do ArcGIS Pro...")
     conexao = GIS(PORTAL)
+    if conexao.users.me is None:
+        print("[X] conexao ANONIMA: o ArcGIS Pro nao esta logado no Portal.")
+        print("    Sem isso o chavesig nao e corrigido na origem e o staging")
+        print("    (STG_PORTE_AVALIACAO / STG_VOO_MISSAO) nao e atualizado.")
+        print("    Verifique, na sessao do usuario que roda a tarefa, se o")
+        print("    ArcGIS Pro esta aberto e logado no Portal de producao.")
+        return 1
     print("conectado como:", conexao.users.me.username)
     print("portal:", conexao.properties.portalHostname)
     print("corrigir origem no Portal:", CORRIGIR_ORIGEM and gravar)
