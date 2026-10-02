@@ -41,7 +41,8 @@ classificar_epoca_plantio ───────────────┤
                                   gerar_relatorio_falhas
 ```
 
-O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` existir.
+O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` e usa o `STATUS` dela:
+depois de recarregar o cadastro, rode o vínculo.
 O `indicadores_clima_talhao` depende do vínculo e do monitoramento. Ele e o
 `classificar_epoca_plantio` usam a data de plantio do PIMS, então vêm depois
 do `carga_status_report`.
@@ -72,7 +73,7 @@ oficial.
 |---|---|---|
 | `carga_status_report` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
 | `sincronizar_surveys_vant` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat`; escreve no Portal a cada execução |
-| `carga_estacoes_zeus` | quando o cadastro das estações mudar | só o cadastro |
+| `carga_estacoes_zeus` | quando o cadastro mudar | só o cadastro, direto do BigQuery; rode o vínculo em seguida |
 | `carga_monitoramento_zeus` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` agendado |
 | `vincular_talhao_estacao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
 | `indicadores_clima_talhao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
@@ -204,7 +205,7 @@ ferramenta avisa e o relatório sai com as linhas que já estavam no banco.
 | `carga_monitoramento_zeus` | `PASTA_ENTRADA` | `ENTRADAS\CLIMA` no OneDrive do João | só existe na conta que sincroniza a pasta |
 | `carga_monitoramento_zeus` | `DIAS_SEM_ATUALIZAR_ALERTA` | 3 | a partir daí o log avisa que o Excel não foi atualizado |
 | `protecao` | `QUEDA_MAXIMA_PCT` | 50 | queda de linhas acima disso não é gravada |
-| `carga_status_report` | `BQ` | conexão do ArcGIS no OneDrive do João | só funciona nessa conta |
+| `carga_status_report`, `carga_estacoes_zeus` | `BQ` | conexão do ArcGIS no OneDrive do João | só funciona nessa conta |
 
 ## Problemas conhecidos e como resolver
 

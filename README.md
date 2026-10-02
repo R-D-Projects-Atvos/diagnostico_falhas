@@ -75,8 +75,8 @@ no Catalog. Todos os scripts rodam no `arcgispro-py3`.
 # 1. cópia local do percentual oficial (BigQuery -> SQL Server)
 python -u src/carga/carga_status_report.py --gravar        # sem --gravar, simula
 
-# 2. estações meteorológicas (só quando o cadastro mudar) e monitoramento diário
-python -u src/carga/carga_estacoes_zeus.py
+# 2. estações meteorológicas (cadastro, do BigQuery) e monitoramento diário
+python -u src/carga/carga_estacoes_zeus.py --gravar        # sem --gravar, simula
 python -u src/carga/carga_monitoramento_zeus.py --gravar   # sem --gravar, simula
 
 # 3. staging dos surveys + correção do chavesig na origem
