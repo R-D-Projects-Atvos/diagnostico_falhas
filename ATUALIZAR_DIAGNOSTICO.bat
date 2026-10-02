@@ -8,11 +8,15 @@ REM   A) carga_status_report.py      -> Status_Report_VANT
 REM                                     (percentual oficial, BigQuery)
 REM   B) sincronizar_surveys_vant.py -> STG_PORTE_AVALIACAO, STG_VOO_MISSAO
 REM                                     (Portal) e correcao do chavesig na origem
-REM   C) carga_monitoramento_zeus.py -> MONITORAMENTO_ESTACAO
+REM   C) carga_estacoes_zeus.py      -> ESTACOES_ZEUS
+REM                                     (cadastro das estacoes, BigQuery)
+REM      carga_monitoramento_zeus.py -> MONITORAMENTO_ESTACAO
 REM                                     (planilha de ENTRADAS\CLIMA)
 REM      vincular_talhao_estacao.py  -> TALHAO_ESTACAO
 REM      indicadores_clima_talhao.py -> INDICADORES_CLIMA_TALHAO
-REM      Dentro do C, cada etapa so roda se a anterior terminou bem.
+REM      O cadastro das estacoes e a primeira etapa do C: se falhar, as
+REM      outras rodam com o cadastro de ontem. Do monitoramento em
+REM      diante, cada etapa so roda se a anterior terminou bem.
 REM   D) classificar_epoca_plantio.py -> EPOCA_PLANTIO_TALHAO
 REM                                     (a data de plantio vem do PIMS, do A)
 REM
@@ -67,7 +71,15 @@ if errorlevel 1 (
 
 REM --------------------------- C --------------------------------------
 echo. >> "%LOG%"
-echo ---------------- [C1] carga_monitoramento_zeus.py  %TIME% ---------------- >> "%LOG%"
+echo ---------------- [C1] carga_estacoes_zeus.py  %TIME% ---------------- >> "%LOG%"
+%PY% -u "%REPO%src\carga\carga_estacoes_zeus.py" --gravar >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo [X] carga_estacoes_zeus.py FALHOU em %TIME%. O vinculo usa o cadastro de ontem. >> "%LOG%"
+    set FALHOU=1
+)
+
+echo. >> "%LOG%"
+echo ---------------- [C2] carga_monitoramento_zeus.py  %TIME% ---------------- >> "%LOG%"
 %PY% -u "%REPO%src\carga\carga_monitoramento_zeus.py" --gravar >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [X] carga_monitoramento_zeus.py FALHOU em %TIME%. Vinculo e clima NAO rodaram. >> "%LOG%"
@@ -76,7 +88,7 @@ if errorlevel 1 (
 )
 
 echo. >> "%LOG%"
-echo ---------------- [C2] vincular_talhao_estacao.py  %TIME% ---------------- >> "%LOG%"
+echo ---------------- [C3] vincular_talhao_estacao.py  %TIME% ---------------- >> "%LOG%"
 %PY% -u "%REPO%src\processamento\vincular_talhao_estacao.py" >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [X] vincular_talhao_estacao.py FALHOU em %TIME%. Clima NAO rodou. >> "%LOG%"
@@ -85,7 +97,7 @@ if errorlevel 1 (
 )
 
 echo. >> "%LOG%"
-echo ---------------- [C3] indicadores_clima_talhao.py  %TIME% ---------------- >> "%LOG%"
+echo ---------------- [C4] indicadores_clima_talhao.py  %TIME% ---------------- >> "%LOG%"
 %PY% -u "%REPO%src\processamento\indicadores_clima_talhao.py" >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [X] indicadores_clima_talhao.py FALHOU em %TIME%. >> "%LOG%"
