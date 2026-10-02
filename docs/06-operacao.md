@@ -41,8 +41,9 @@ classificar_epoca_plantio ───────────────┤
                                   gerar_relatorio_falhas
 ```
 
-O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` e usa o `STATUS` dela:
-depois de recarregar o cadastro, rode o vínculo.
+O `vincular_talhao_estacao` depende da `ESTACOES_ZEUS` e usa o `STATUS` dela —
+por isso o ciclo das 6h recarrega o cadastro logo antes do vínculo. Recarregou
+o cadastro à mão? Rode o vínculo em seguida.
 O `indicadores_clima_talhao` depende do vínculo e do monitoramento. Ele e o
 `classificar_epoca_plantio` usam a data de plantio do PIMS, então vêm depois
 do `carga_status_report`.
@@ -73,7 +74,7 @@ oficial.
 |---|---|---|
 | `carga_status_report` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
 | `sincronizar_surveys_vant` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat`; escreve no Portal a cada execução |
-| `carga_estacoes_zeus` | quando o cadastro mudar | só o cadastro, direto do BigQuery; rode o vínculo em seguida |
+| `carga_estacoes_zeus` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat`, antes do vínculo; só o cadastro, direto do BigQuery |
 | `carga_monitoramento_zeus` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` agendado |
 | `vincular_talhao_estacao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
 | `indicadores_clima_talhao` | diária, 6h | pelo `ATUALIZAR_DIAGNOSTICO.bat` |
@@ -101,9 +102,11 @@ grupos independentes — a falha de um não impede os outros:
 - **A.** `carga_status_report.py --gravar` → `Status_Report_VANT` (percentual oficial)
 - **B.** `sincronizar_surveys_vant.py --gravar` → `STG_PORTE_AVALIACAO`,
   `STG_VOO_MISSAO` e correção do chavesig no Portal
-- **C.** `carga_monitoramento_zeus.py --gravar` → `vincular_talhao_estacao.py` →
-  `indicadores_clima_talhao.py`; dentro do C, cada etapa só roda se a anterior
-  terminou bem
+- **C.** `carga_estacoes_zeus.py --gravar` → `carga_monitoramento_zeus.py --gravar`
+  → `vincular_talhao_estacao.py` → `indicadores_clima_talhao.py`. O cadastro das
+  estações é a primeira etapa: se falhar, as outras rodam com o cadastro de
+  ontem. Do monitoramento em diante, cada etapa só roda se a anterior terminou
+  bem
 - **D.** `classificar_epoca_plantio.py` → `EPOCA_PLANTIO_TALHAO`; usa a data de
   plantio do PIMS, então vem depois do A
 
@@ -138,6 +141,7 @@ Para rodar à mão — sem `--gravar`, todas só simulam:
 
 ```
 propy -u src\carga\carga_status_report.py        [--gravar]
+propy -u src\carga\carga_estacoes_zeus.py        [--gravar]
 propy -u src\carga\sincronizar_surveys_vant.py   [--gravar]
 propy -u src\carga\carga_monitoramento_zeus.py   [--gravar]
 ATUALIZAR_DIAGNOSTICO.bat                          (tudo, gravando)

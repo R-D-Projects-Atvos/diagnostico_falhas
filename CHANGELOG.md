@@ -48,7 +48,9 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
   e usa as proteções do `protecao.py`. Na primeira execução, 6 estações estavam
   com o `status` desatualizado — é ele que decide quais entram no vínculo.
   O `carga_estacoes_zeus.py` deixou de carregar o monitoramento, que já era do
-  `carga_monitoramento_zeus.py` e continua vindo da planilha.
+  `carga_monitoramento_zeus.py` e continua vindo da planilha. O cadastro passa a
+  ser recarregado todo dia às 6h, na primeira etapa do grupo C, antes do
+  vínculo: se falhar, as outras etapas rodam com o cadastro de ontem.
 
 ### Corrigido
 
