@@ -115,8 +115,11 @@ valor padrão não editado).
 
 ## 5. Zeus — estações meteorológicas
 
-**Cadastro das estações:** planilha exportada uma vez de `dl-bq-prd.bronze_zeus.pics`.
-Muda raramente; recarregue com `carga_estacoes_zeus.py` só quando mudar.
+**Cadastro das estações:** `dl-bq-prd.bronze_zeus.pics`, lido direto pelo
+`carga_estacoes_zeus.py` com a conexão do ArcGIS do OneDrive do João — a mesma
+do percentual oficial. São 170 estações; o que muda de uma carga para outra é o
+`status`, e é ele que decide quais entram no vínculo talhão–estação. Até
+02/10/2026 vinha de uma planilha exportada à mão.
 
 **Monitoramento diário:** planilha que o Excel atualiza com a consulta de
 [`sql/monitoramento_zeus.sql`](../sql/monitoramento_zeus.sql) (Power Query, ODBC ao BigQuery) e
@@ -155,8 +158,8 @@ metade da rede calculando e a outra metade não.
 
 A `areas` **não traz CAD nem tipo de solo** — só identificação.
 
-**Carga:** `src/carga/carga_estacoes_zeus.py` (cadastro) e
-`src/carga/carga_monitoramento_zeus.py` (diário).
+**Carga:** `src/carga/carga_estacoes_zeus.py` (cadastro, do BigQuery) e
+`src/carga/carga_monitoramento_zeus.py` (diário, ainda da planilha).
 
 ## 6. Mancha de solos
 

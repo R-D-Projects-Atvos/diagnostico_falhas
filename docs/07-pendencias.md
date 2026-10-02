@@ -164,10 +164,6 @@ está sem configuração, a ODBC `dl-bq-prd` da conta do João tem o token recus
 (`invalid_grant`), e a cópia da conexão do ArcGIS em `D:\GEO\TALHOES` trava
 esperando login.
 
-Enquanto o cadastro das estações não for recarregado, o **status** de cada estação
-(OK, intermitente, falha) fica como estava na exportação — e é ele que decide
-quais estações entram no vínculo.
-
 ### Registro de missão com 8% de cobertura
 
 Só 364 dos 4.611 talhões têm voo vinculado, e 200 têm porte. Não é problema

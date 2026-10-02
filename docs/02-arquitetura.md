@@ -27,10 +27,11 @@ Survey123 (Portal)            sincronizar_surveys      │   gerar_relatorio
 Porte + Registro de Missão ─► STG_PORTE_AVALIACAO      │        │
                               STG_VOO_MISSAO           │        ├─► HTML
                                                        │        └─► PDF
-Planilhas Zeus                carga_estacoes_zeus      │
-(BigQuery, provisório)    ──► ESTACOES_ZEUS            │   mapa de calor (PNG)
-                              MONITORAMENTO_ESTACAO    │   linhas de falha (PNG)
-                                     │                 │   chuva diária (PNG)
+BigQuery bronze_zeus          carga_estacoes_zeus      │
+pics (cadastro)           ──► ESTACOES_ZEUS            │   mapa de calor (PNG)
+Planilha Zeus (provisória)    carga_monitoramento_zeus │   linhas de falha (PNG)
+(monitoramento)           ──► MONITORAMENTO_ESTACAO    │   chuva diária (PNG)
+                                     │                 │
                                      ▼                 │
                               vincular_talhao_estacao  │
                               TALHAO_ESTACAO           │

@@ -2,8 +2,8 @@
 """
 Atualiza o monitoramento diario das estacoes Zeus (MONITORAMENTO_ESTACAO).
 
-So o diario. O cadastro das estacoes (ESTACOES_ZEUS) muda raramente e fica
-com o carga_estacoes_zeus.py, rodado a mao quando precisar.
+So o diario. O cadastro das estacoes (ESTACOES_ZEUS) e do
+carga_estacoes_zeus.py, que le direto do BigQuery.
 
 Origem hoje: a planilha que o Excel atualiza com a consulta de
 sql\\monitoramento_zeus.sql, salva em ENTRADAS\\CLIMA na pasta do projeto.
@@ -61,6 +61,17 @@ SDE = r"D:\GEO\TALHOES\SQLServer-10-gisdb(atvospublicador).sde"
 TB_DIARIO = SDE + r"\ATVOSPUBLICADOR.MONITORAMENTO_ESTACAO"
 FC_ESTACOES = os.path.join(SDE, "ATVOSPUBLICADOR.AGRICOLA_ATVOS",
                            "ATVOSPUBLICADOR.ESTACOES_ZEUS")
+
+# colunas da MONITORAMENTO_ESTACAO, na ordem em que a consulta devolve
+COLS_DIARIO = [
+    ("PIC_ID", "LONG"), ("DIA", "DATE"),
+    ("TEMP_MIN", "DOUBLE"), ("TEMP_MEDIA", "DOUBLE"), ("TEMP_MAX", "DOUBLE"),
+    ("UMID_MIN", "DOUBLE"), ("UMID_MEDIA", "DOUBLE"), ("UMID_MAX", "DOUBLE"),
+    ("PRESSAO_MIN", "DOUBLE"), ("PRESSAO_MEDIA", "DOUBLE"),
+    ("PRESSAO_MAX", "DOUBLE"), ("VENTO_INST_MEDIA", "DOUBLE"),
+    ("VENTO_MEDIA", "DOUBLE"), ("RAJADA_MAX", "DOUBLE"),
+    ("CHUVA_TOTAL", "DOUBLE"), ("IRRADIACAO_MEDIA", "DOUBLE"),
+]
 
 # copia da tabela antes de cada gravacao; volta sozinha se a gravacao falhar
 GDB_BACKUP = r"D:\GEO\FALHAS\clima_backup.gdb"
@@ -174,7 +185,6 @@ def gravar(linhas, agora):
     """Copia a tabela atual, apaga e regrava. Se a gravacao falhar no meio,
     devolve a copia antes de sair - a tabela nunca fica pela metade."""
     import arcpy
-    from carga_estacoes_zeus import COLS_DIARIO
 
     arcpy.env.overwriteOutput = True
     if not arcpy.Exists(GDB_BACKUP):

@@ -87,7 +87,8 @@ Cópia local do percentual oficial. Um registro por talhão, sem repetição —
 
 ### `ESTACOES_ZEUS` (feature class, point, 4326)
 
-170 estações, uma por fazenda atendida. O campo `NOME` segue `UNIDADE_FAZENDA`
+170 estações, uma por fazenda atendida, carregadas do `bronze_zeus.pics` pelo
+`carga_estacoes_zeus.py`. O campo `NOME` segue `UNIDADE_FAZENDA`
 (ex.: `USL_320013`), de onde `UNIDADE` e `COD_FAZENDA` são extraídos. Tolera
 sufixo — `URC_219053 II` resolve para URC/219053.
 

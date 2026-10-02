@@ -42,6 +42,13 @@ Formato: o que mudou e por quê. Versões seguem `MAJOR.MINOR`.
   talhões e a época de 5.520 para 5.720: plantios de julho em diante e talhões
   de reforma deixam de ficar sem clima, ou com a janela de um plantio antigo.
 - Linhas de falha sem talhão (borda) não são mais gravadas.
+- O cadastro das estações vem direto do `bronze_zeus.pics`, pela conexão do
+  ArcGIS que o percentual oficial já usa, no lugar de uma planilha exportada à
+  mão. A carga simula sem `--gravar`, mostra estação por estação o que mudaria
+  e usa as proteções do `protecao.py`. Na primeira execução, 6 estações estavam
+  com o `status` desatualizado — é ele que decide quais entram no vínculo.
+  O `carga_estacoes_zeus.py` deixou de carregar o monitoramento, que já era do
+  `carga_monitoramento_zeus.py` e continua vindo da planilha.
 
 ### Corrigido
 
