@@ -11,15 +11,21 @@ Cria/atualiza:
 Surveys de producao (confirmados em 11/09/2026):
   "Avaliacao de Porte Cana - Pilotos ATVOS"  item b2b4a34c14f24f2a9ca3a22a43154ad5
   "Registro de Missao - VANT"                item 55646b00864c4d458a5a8e4d0aa1d289
+  porte com lista de talhoes por GPS         ver SRV_PORTE_GPS
 
 Ordem de cada survey:
   1. le pai + repeat do Portal
-  2. reconstroi o chavesig de cod_fazenda + cod_setor + cod_talhao
+  2. define o chavesig de cada linha de talhao:
+     - survey com lista de talhoes por GPS: a chavesig vem da escolha do
+       piloto, ja pronta no repeat, uma por talhao. Nada a remontar.
+     - survey antigo: reconstroi de cod_fazenda + cod_setor do pai mais o
+       cod_talhao do repeat - e portanto refem do setor digitado no pai.
   3. confere o que foi lido contra o staging atual - so entao apaga e regrava
   4. corrige no Portal as linhas divergentes e registra no log
 
 O passo 4 escreve em producao a cada execucao. Por isso o log: toda alteracao
-fica com data, valor anterior e valor novo.
+fica com data, valor anterior e valor novo. Ele nao roda no survey da lista por
+GPS: ali a chave e a escolha do piloto, nao ha o que corrigir.
 
 Sem --gravar, so simula: le o Portal, mostra quantas linhas iriam para o
 staging e quantas seriam corrigidas no Portal, e nao grava nada em lugar
@@ -37,6 +43,7 @@ Geotecnologia / Cartografia - Atvos
 import datetime
 import functools
 import os
+import re
 import sys
 
 import arcpy
@@ -56,6 +63,18 @@ PORTAL = "pro"
 BASE = "https://geoportal.atvos.com/server/rest/services/Hosted"
 SRV_PORTE = BASE + "/service_a170152fc3934e68be6a4fcbc6808bd8/FeatureServer"
 SRV_MISSAO = BASE + "/service_ffb97edbaa524ba3872425369a9b214b/FeatureServer"
+
+# Survey de porte com lista de talhoes por GPS: o piloto escolhe o talhao entre
+# os que estao a 400 m dele, e a chavesig sai da escolha. E survey NOVO, nao
+# atualizacao do antigo - os campos sao outros, e publicar por cima apagaria as
+# avaliacoes ja registradas. Por isso os dois sao lidos, para o mesmo staging.
+#
+# Preencha com a URL do FeatureServer depois de publicar, no formato
+#   BASE + "/service_<id>/FeatureServer"
+# Vazio: ignorado, e o script se comporta exatamente como antes.
+SRV_PORTE_GPS = ""
+
+CHAVE_14 = re.compile(r"^\d{14}$")
 
 SDE = r"D:\GEO\TALHOES\SQLServer-10-gisdb(atvospublicador).sde"
 TB_PORTE = "STG_PORTE_AVALIACAO"
@@ -77,6 +96,12 @@ CAMPOS_PORTE = [
     ("PORTE_ADEQUADO", "TEXT", 5), ("OBS_CAMPO", "TEXT", 255),
     ("PREVISAO_RETORNO", "DATE", None), ("QTD_TALHOES_INFO", "TEXT", 10),
     ("ID_AVALIACAO", "TEXT", 40), ("DATA_CARGA", "DATE", None),
+    # Por TALHAO, e so o survey com lista por GPS os preenche: nas avaliacoes
+    # do survey antigo ficam nulos, porque a altura nunca foi coletada por
+    # talhao. O PORTE_ADEQUADO acima continua sendo o veredito da AVALIACAO
+    # inteira, como sempre foi.
+    ("ALTURA_M", "DOUBLE", None), ("PORTE_TALHAO", "TEXT", 10),
+    ("OBS_TALHAO", "TEXT", 255),
 ]
 
 CAMPOS_VOO = [
@@ -100,9 +125,28 @@ def caminho(nome):
     return SDE + "\\ATVOSPUBLICADOR." + nome
 
 
+def acrescentar_campos(destino, nome, campos):
+    """Cria as colunas que a tabela ainda nao tem.
+
+    O staging nasceu antes de o formulario coletar altura e porte por talhao.
+    Sem isto, acrescentar um campo na lista acima nao criaria coluna nenhuma -
+    o criar() saia pela porta so por a tabela existir - e o dado coletado no
+    campo seria descartado calado na gravacao."""
+    existentes = set(f.name.upper() for f in arcpy.ListFields(destino))
+    for c, tipo, tam in campos:
+        if c.upper() in existentes:
+            continue
+        print("  acrescentando coluna %s.%s (%s)" % (nome, c, tipo))
+        if tam:
+            arcpy.management.AddField(destino, c, tipo, field_length=tam)
+        else:
+            arcpy.management.AddField(destino, c, tipo)
+
+
 def criar(nome, campos, indice="CHAVESIG"):
     destino = caminho(nome)
     if arcpy.Exists(destino):
+        acrescentar_campos(destino, nome, campos)
         return destino
     print("criando %s" % nome)
     arcpy.management.CreateTable(SDE, nome)
@@ -154,6 +198,17 @@ def chavesig(fazenda, setor, talhao):
     return "".join(partes)
 
 
+def partes_chave(chave):
+    """Fazenda, setor e talhao tirados da propria chavesig.
+
+    As tres colunas de codigo do staging saem daqui, e nao mais do que foi
+    digitado no pai: assim nenhuma delas discorda da chave que esta na linha.
+    Vem com os zeros a esquerda, no formato da chave (6/4/4)."""
+    if not chave:
+        return None, None, None
+    return chave[:6], chave[6:10], chave[10:]
+
+
 def consultar_tudo(camada, out_fields):
     """Todas as feicoes da camada, em lotes.
 
@@ -176,10 +231,14 @@ def consultar_tudo(camada, out_fields):
     return feicoes
 
 
-def ler_survey(gis, url_srv, campos_pai):
+def ler_survey(gis, url_srv, campos_pai, chave_no_repeat=False):
     """Devolve (linhas, dominios, tabela_filho).
 
-    linhas: lista de (atributos_do_pai, atributos_da_linha, chavesig_calculado)
+    linhas: lista de (atributos_do_pai, atributos_da_linha, chavesig)
+
+    chave_no_repeat=True: a chavesig ja vem pronta no repeat, uma por talhao,
+    porque o piloto escolheu o talhao numa lista em vez de digitar codigo. E
+    ela que vale - e so se ela faltar o pai volta a ser consultado.
     """
     pai = FeatureLayer(url_srv + "/0", gis=gis)
     filho = Table(url_srv + "/1", gis=gis)
@@ -192,16 +251,24 @@ def ler_survey(gis, url_srv, campos_pai):
         if chave:
             pais[chave] = a
 
+    # "*" porque o repeat de cada survey tem campos diferentes: o da lista por
+    # GPS traz altura e porte por talhao, o antigo nao.
     linhas = []
-    for f in consultar_tudo(filho, "objectid,parentrowid,cod_talhao,chavesig"):
+    for f in consultar_tudo(filho, "*"):
         a = f.attributes
         p = pais.get((a.get("parentrowid") or "").upper())
         if not p:
             continue
         if p.get("cod_fazenda") in IGNORAR_FAZENDAS:
             continue
-        chv = chavesig(p.get("cod_fazenda"), p.get("cod_setor"),
-                       a.get("cod_talhao"))
+        chv = None
+        if chave_no_repeat:
+            escolhida = (a.get("chavesig") or "").strip()
+            if CHAVE_14.match(escolhida):
+                chv = escolhida
+        if chv is None:
+            chv = chavesig(p.get("cod_fazenda"), p.get("cod_setor"),
+                           a.get("cod_talhao"))
         linhas.append((p, a, chv))
 
     print("  pais: %d | linhas de talhao: %d" % (len(pais), len(linhas)))
@@ -263,25 +330,39 @@ def sincronizar_porte(gis, log_caminho, agora, gravar):
     campos = ["uniquerowid", "cod_fazenda", "cod_setor", "dt_avaliacao",
               "piloto", "porte_adequado", "obs_campo", "previsao_retorno",
               "qtd_talhoes"]
-    linhas, doms, filho = ler_survey(gis, SRV_PORTE, campos)
+    # (nome, url, a chavesig vem do repeat?). Os dois surveys de porte vao para
+    # o mesmo staging: o antigo guarda as avaliacoes ja feitas, e e dele que a
+    # vw_relatorio_falhas tira o porte das avaliacoes anteriores.
+    fontes = [("porte", SRV_PORTE, False)]
+    if SRV_PORTE_GPS:
+        fontes.append(("porte_gps", SRV_PORTE_GPS, True))
 
-    novas, sem_chave = [], 0
-    for p, a, chv in linhas:
-        if not chv:
-            sem_chave += 1
-        novas.append([
-            chv, str(p.get("cod_fazenda")), str(p.get("cod_setor")),
-            str(a.get("cod_talhao")), local(p.get("dt_avaliacao")),
-            doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
-            limpa(p.get("porte_adequado")), limpa(p.get("obs_campo")),
-            local(p.get("previsao_retorno")), limpa(p.get("qtd_talhoes")),
-            p.get("uniquerowid"), agora,
-        ])
+    novas, sem_chave, a_corrigir = [], 0, []
+    for nome_survey, url, chave_no_repeat in fontes:
+        print("  survey %s%s" % (nome_survey, " - chavesig da lista por GPS"
+                                 if chave_no_repeat else " - chavesig do setor do pai"))
+        linhas, doms, filho = ler_survey(gis, url, campos, chave_no_repeat)
+        for p, a, chv in linhas:
+            if not chv:
+                sem_chave += 1
+            faz, setor, talhao = partes_chave(chv)
+            novas.append([
+                chv, faz, setor, talhao, local(p.get("dt_avaliacao")),
+                doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
+                limpa(p.get("porte_adequado")), limpa(p.get("obs_campo")),
+                local(p.get("previsao_retorno")), limpa(p.get("qtd_talhoes")),
+                p.get("uniquerowid"), agora,
+                a.get("altura_m"), limpa(a.get("porte_talhao")),
+                limpa(a.get("obs_talhao")),
+            ])
+        if not chave_no_repeat:
+            a_corrigir.append((filho, linhas, nome_survey))
 
     if not gravar_staging(TB_PORTE, CAMPOS_PORTE, novas, sem_chave, gravar):
         return False
     if CORRIGIR_ORIGEM:
-        corrigir_origem(filho, linhas, "porte", log_caminho, agora, gravar)
+        for filho, linhas, nome_survey in a_corrigir:
+            corrigir_origem(filho, linhas, nome_survey, log_caminho, agora, gravar)
     return True
 
 
@@ -300,9 +381,9 @@ def sincronizar_voo(gis, log_caminho, agora, gravar):
         dur = None
         if saida and retorno:
             dur = round((retorno - saida).total_seconds() / 3600.0, 2)
+        faz, setor, talhao = partes_chave(chv)
         novas.append([
-            chv, str(p.get("cod_fazenda")), str(p.get("cod_setor")),
-            str(a.get("cod_talhao")), saida, retorno, dur,
+            chv, faz, setor, talhao, saida, retorno, dur,
             doms.get("piloto", {}).get(p.get("piloto"), p.get("piloto")),
             doms.get("vant_id", {}).get(p.get("vant_id"), p.get("vant_id")),
             doms.get("tipo_missao", {}).get(p.get("tipo_missao"),
