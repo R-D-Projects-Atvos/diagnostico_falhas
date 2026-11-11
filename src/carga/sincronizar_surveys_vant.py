@@ -72,7 +72,7 @@ SRV_MISSAO = BASE + "/service_ffb97edbaa524ba3872425369a9b214b/FeatureServer"
 # Preencha com a URL do FeatureServer depois de publicar, no formato
 #   BASE + "/service_<id>/FeatureServer"
 # Vazio: ignorado, e o script se comporta exatamente como antes.
-SRV_PORTE_GPS = ""
+SRV_PORTE_GPS = BASE + "/service_7fc96160a91c4d3a849c81dea467e132/FeatureServer"
 
 CHAVE_14 = re.compile(r"^\d{14}$")
 
